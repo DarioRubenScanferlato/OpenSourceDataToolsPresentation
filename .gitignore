@@ -10,3 +10,4 @@ wheels/
 .venv
 _bmad
 .claude
+docs
