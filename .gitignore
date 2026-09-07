@@ -8,6 +8,13 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Ai slop
 _bmad
 .claude
 docs
+
+*.DS_Store
+*.pptx
+# marimo session cache
+__marimo__/
