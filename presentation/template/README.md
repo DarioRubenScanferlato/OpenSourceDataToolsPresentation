@@ -13,7 +13,8 @@ template/
   assets.py       loads images from presentation/images/
   layout.py       generates layouts/<deck>.slides.json, incl. speaker notes
   nearform.css    generated — hand to marimo.App(css_file=...)
-images/           headshots, logos, QR codes, diagrams
+images/           headshots, QR codes, diagrams
+  logos/          product logos (see images/logos/README.md)
 ```
 
 `../example_deck.py` is a working deck that uses every helper. Copy it as the
@@ -82,7 +83,7 @@ its own foreground, muted, accent and rule colours. Pass `tone=` to any builder.
 | Function | pptx slide | What it makes |
 |---|---|---|
 | `title_slide(title, event, author)` | 1 | mint 56pt title on navy |
-| `speaker(name, role, handle, photo, note)` | 2 | who's talking, optional photo/QR |
+| `speaker(name, role, handle, photo, bio, links)` | 2 | who's talking: photo/QR, bio list, contact row |
 | `section(title, kicker)` | 3 | navy title on the mint field |
 | `closing(title="Questions")` | 8 | the same, for the end |
 | `slide(*content, title, kicker, tone, page)` | — | the general frame |
@@ -91,6 +92,8 @@ its own foreground, muted, accent and rule colours. Pass `tone=` to any builder.
 | `quote(text, author, role)` | 4, 6, 7 | pull quote in Bitter |
 | `cards([(title, body), ...])` | — | tinted blocks |
 | `two_col(left, right, ratio=(3, 2))` | 6, 7 | column split |
+| `tool(name, logo, note, layout)` | — | a product: logo + name, or an initials chip |
+| `stack(layers, columns)` | — | a column per platform layer, ruled across the top |
 | `bullets([...])` | — | list with the `_` marker |
 | `heading` `eyebrow` `lead` `body` `caption` | — | the type scale |
 | `code(source, language)` | — | a code panel |

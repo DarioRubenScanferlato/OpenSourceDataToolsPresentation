@@ -31,10 +31,12 @@ content inside a ``slide()`` rather than returning it from a cell on its own.
 from __future__ import annotations
 
 import html
+from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 import marimo as mo
 
+from . import assets
 from . import theme as t
 
 __all__ = [
@@ -54,6 +56,8 @@ __all__ = [
     "quote",
     "cards",
     "two_col",
+    "tool",
+    "stack",
     "code",
     "image",
     "logo",
@@ -111,6 +115,7 @@ def slide(
     align: str = "top",
     gap: str = _S["gap"],
     mark: bool = True,
+    pad_top: str | None = None,
 ) -> mo.Html:
     """The general-purpose content slide.
 
@@ -123,6 +128,9 @@ def slide(
         align: ``top`` (default) or ``center``.
         gap: vertical rhythm between blocks, as a CSS length.
         mark: append the accent ``_`` motif to the title.
+        pad_top: override the template's 17.4% top margin. Dense slides - a
+            grid, a wide table - need to start higher, and a slide that
+            overflows scrolls rather than shrinks, so buy the room here.
     """
     tn = t.tone(tone)
     blocks: list[str] = []
@@ -146,7 +154,7 @@ def slide(
             box_sizing="border-box",
             position="relative",
             min_height=t.SLIDE_MIN_HEIGHT,
-            padding=f"{_S['margin_top']} {_S['margin_x']} {_S['margin_bottom']}",
+            padding=f"{pad_top or _S['margin_top']} {_S['margin_x']} {_S['margin_bottom']}",
             display="flex",
             flex_direction="column",
             justify_content="center" if align == "center" else "flex-start",
@@ -640,6 +648,166 @@ def cards(
                 display="grid",
                 grid_template_columns=f"repeat({n}, 1fr)",
                 gap=_S["gap"],
+            ),
+            cells,
+        )
+    )
+
+
+def tool(
+    name: str,
+    logo: Any = None,
+    note: str | None = None,
+    tone: str = t.DEFAULT_TONE,
+    height: str | None = None,
+    layout: str = "column",
+) -> mo.Html:
+    """One product: its logo and its name.
+
+    Args:
+        name: the product name, always shown.
+        logo: a file name in ``presentation/images/`` (``"logos/powerbi.png"``),
+            or anything renderable. When the file isn't there - which is most of
+            them, most of the time - the name is set in a tinted chip instead,
+            so the slide reads as finished rather than broken.
+        note: a small qualifier under the name ("Direct Lake", "Spark").
+        tone: slide tone.
+        height: logo box height; defaults to the template's 40pt.
+        layout: ``column`` puts the logo above the name, ``row`` beside it.
+            Use ``row`` when several of these share a slide - it costs about
+            half the vertical space, which is the difference between a slide
+            that fits and one marimo makes the audience scroll.
+    """
+    tn = t.tone(tone)
+    box = height or t.pt(40)
+    tint = "rgba(255,255,255,0.06)" if tone == "navy" else "rgba(0,14,56,0.06)"
+
+    mark: str
+    if isinstance(logo, (str, Path)) and assets.exists(logo):
+        mark = assets.img(
+            logo,
+            width="auto",
+            rounded=False,
+            alt=name,
+            style={"height": box, "object-fit": "contain"},
+        ).text
+    elif logo is not None and not isinstance(logo, (str, Path)):
+        mark = _render(logo)
+    else:
+        # No logo file: a tinted chip carrying the initials. One-word names get
+        # two letters, so "Snowpipe" reads as "Sn" rather than a lonely "S".
+        words = name.split()
+        initials = (
+            words[0][:2] if len(words) == 1 else "".join(w[0] for w in words[:2])
+        ).upper()
+        mark = _div(
+            _style(
+                height=box,
+                aspect_ratio="1",
+                border_radius=_S["radius"],
+                background=tint,
+                color=tn.accent,
+                display="flex",
+                align_items="center",
+                justify_content="center",
+                font_size=t.SIZE["body"],
+                font_weight=t.WEIGHT["black"],
+                letter_spacing="-0.02em",
+            ),
+            html.escape(initials),
+        )
+
+    body_html = _div(
+        _style(
+            color=tn.fg,
+            font_size=t.SIZE["small"],
+            font_weight=t.WEIGHT["medium"],
+            line_height="1.3",
+        ),
+        html.escape(name),
+    )
+    if note:
+        body_html += _div(
+            _style(color=tn.muted, font_size=t.SIZE["caption"], margin_top="0.2em"),
+            html.escape(note),
+        )
+
+    row = layout == "row"
+    return mo.Html(
+        _div(
+            _style(
+                display="flex",
+                flex_direction="row" if row else "column",
+                gap=_S["gap_sm"],
+                align_items="center" if row else "flex-start",
+            ),
+            _div(
+                _style(
+                    height=box,
+                    display="flex",
+                    align_items="center",
+                    flex="0 0 auto",
+                ),
+                mark,
+            )
+            + (_div(_style(min_width="0"), body_html) if row else body_html),
+        )
+    )
+
+
+def stack(
+    layers: Sequence[tuple[str, Sequence[Any]]],
+    tone: str = t.DEFAULT_TONE,
+    columns: int | None = None,
+    gap: str | None = None,
+) -> mo.Html:
+    """The platform laid out a column per layer.
+
+    ``layers`` is ``(layer_name, [tool(...), ...])`` - one column each, ruled
+    across the top the way the template's metric panel is:
+
+        nf.stack([
+            ("Ingestion", [nf.tool("Snowpipe")]),
+            ("Storage", [nf.tool("Iceberg tables", "logos/iceberg.png")]),
+        ])
+
+    ``gap`` tunes both the grid gutter and the space between tools in a column;
+    it defaults tight, because these grids are the densest thing on a slide and
+    a slide that overflows scrolls rather than shrinks.
+    """
+    tn = t.tone(tone)
+    gap = gap or _S["gap_sm"]
+    cells = "".join(
+        _div(
+            _style(
+                border_top=f"1px solid {tn.rule}",
+                padding_top=_S["gap_sm"],
+                display="flex",
+                flex_direction="column",
+                gap=gap,
+            ),
+            _div(
+                _style(
+                    color=tn.accent,
+                    font_size=t.SIZE["caption"],
+                    font_weight=t.WEIGHT["medium"],
+                    text_transform="uppercase",
+                    letter_spacing="0.12em",
+                ),
+                html.escape(layer),
+            )
+            + "".join(_render(item) for item in items),
+        )
+        for layer, items in layers
+    )
+    n = columns or len(layers) or 1
+    return mo.Html(
+        _div(
+            _style(
+                display="grid",
+                grid_template_columns=f"repeat({n}, 1fr)",
+                gap=f"{gap} {_S['gap']}",
+                align_items="start",
             ),
             cells,
         )

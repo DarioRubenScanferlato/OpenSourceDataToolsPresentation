@@ -1,0 +1,73 @@
+{
+  "type": "slides",
+  "data": {
+    "cells": [
+      {
+        "type": "skip"
+      },
+      {},
+      {
+        "type": "skip"
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Open cold. Name the talk, not yourself."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "30 seconds. Then move."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Four layers. Do not go deep here."
+      },
+      {},
+      {},
+      {},
+      {},
+      {
+        "type": "slide",
+        "speakerNotes": "Credibility slide. 20 seconds max."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Node.js metrics."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Section break - say the thesis out loud."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Read the quote, do not paraphrase it."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "The pieces of the stack."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Code slide. Press C to show the cell source."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Live demo. If it breaks, keep talking."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Resources - leave this up during Q&A setup."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Questions."
+      },
+      {
+        "type": "skip"
+      }
+    ],
+    "deck": {
+      "transition": "none",
+      "verticalAlign": "top"
+    }
+  }
+}

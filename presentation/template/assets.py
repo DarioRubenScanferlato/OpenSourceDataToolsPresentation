@@ -43,8 +43,12 @@ def images_dir() -> Path:
     return Path(__file__).resolve().parent.parent / IMAGES_DIRNAME
 
 
+#: Tried in order when a name's own extension doesn't match a file on disk.
+IMAGE_SUFFIXES = (".svg", ".png", ".webp", ".jpg", ".jpeg", ".gif", ".avif")
+
+
 def path(name: str | Path) -> Path:
-    """Absolute path to an asset. Does not check that it exists.
+    """Absolute path to an asset.
 
     Forgiving about how the name is written, because all of these mean the same
     file and it isn't worth remembering which one is "right":
@@ -53,18 +57,31 @@ def path(name: str | Path) -> Path:
         "images/profilepic.jpg"
         "presentation/images/profilepic.jpg"
         "/absolute/path/to/profilepic.jpg"
+
+    The extension is a hint, not a requirement: ask for ``logos/powerbi.png``
+    and you get ``logos/powerbi.svg`` if that is what's on disk. A logo you
+    find as an SVG and one you find as a PNG shouldn't need a code change.
+
+    Returns the name as given (resolved into the images folder) when nothing
+    matches, so callers can report a path the reader recognises.
     """
     candidate = Path(name)
-    if candidate.is_absolute():
-        return candidate
+    if not candidate.is_absolute():
+        parts = candidate.parts
+        # Drop a leading path that just restates where the images folder is.
+        for prefix in (("presentation", IMAGES_DIRNAME), (IMAGES_DIRNAME,)):
+            if parts[: len(prefix)] == prefix:
+                parts = parts[len(prefix) :]
+                break
+        candidate = images_dir().joinpath(*parts) if parts else images_dir()
 
-    parts = candidate.parts
-    # Drop a leading path that just restates where the images folder is.
-    for prefix in (("presentation", IMAGES_DIRNAME), (IMAGES_DIRNAME,)):
-        if parts[: len(prefix)] == prefix:
-            parts = parts[len(prefix) :]
-            break
-    return images_dir().joinpath(*parts) if parts else images_dir()
+    if candidate.is_file():
+        return candidate
+    for suffix in IMAGE_SUFFIXES:
+        alternative = candidate.with_suffix(suffix)
+        if alternative.is_file():
+            return alternative
+    return candidate
 
 
 def exists(name: str | Path) -> bool:

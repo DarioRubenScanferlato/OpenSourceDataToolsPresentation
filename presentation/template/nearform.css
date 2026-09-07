@@ -23,6 +23,14 @@ body:has(.mo-slide) {
   background: #000E38;
 }
 
+/* A cell that isn't wrapped in nf.slide() still has to be readable. marimo's
+   prose colours assume a light page, and the deck's letterbox is navy, so such
+   a slide would be dark-on-dark. Give it a white ground instead - legible, and
+   visibly not-yet-branded, which is the nudge you want. */
+.reveal .slides > section:not(:has([data-nf-slide])) {
+  background: #FFFFFF;
+}
+
 /* Full-bleed slide backgrounds. The reveal <section> sits above our markup,
    so a slide's tone has to be set from here to reach the slide's own edges. */
 .reveal .slides > section:has([data-nf-tone="navy"]),
@@ -72,7 +80,7 @@ body:has(.mo-slide) {
 
 /* Same for colour: prose tints bold text and links for a light page, which
    disappears on navy. Take the slide's own colours instead. */
-[data-nf-slide] :is(strong, b, em, i, p, li, span) {
+[data-nf-slide] :is(strong, b, em, i, p, li, span, h1, h2, h3, h4, h5, h6) {
   color: inherit;
 }
 [data-nf-slide] a {

@@ -24,7 +24,20 @@ def _():
 
     from template import assets, nf, theme
 
-    return assets, mo, nf
+    return assets, mo, nf, theme
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    # Index
+    - Title
+    - Speaker presentation
+    - Agenda
+    - What is a data platform
+    - Data platforms and their services (comparison of services: Fabric, Databricks, Snowflake)
+    """)
+    return
 
 
 @app.cell(hide_code=True)
@@ -54,6 +67,13 @@ def _(assets, nf):
         role="Senior Data Engineer @ Nearform",
         handle="dario.scanferlato@gmail.com",
         photo=assets.img("images/profilepic.jpg"),
+        bio=[
+            "Worked in the supply chain, healthcare, and energy sectors",
+            "Currently developing a nature conservation planning app",
+            "MSc in Engineering and Management at Politecnico di Torino",
+            "Volunteer of the Python Torino user group",
+            "Talk to me about recording music, chess, and open-source",
+        ],
         page=2,
     )
     return
@@ -61,7 +81,21 @@ def _(assets, nf):
 
 @app.cell
 def _(nf):
-    nf.section("What we are building", kicker="OS Data Platform")
+    nf.slide(
+        nf.lead(
+            "Is it possible to build a data platform using open-source tools?"
+        ),
+        nf.bullets(
+            [
+                "What do we mean by data platform?",
+                "Is it a good idea?",
+                "How would you even do it?",
+                "Why would it be better than using a proprietary alternative?",
+            ]
+        ),
+        title="In this presentation",
+        page=4,
+    )
     return
 
 
@@ -69,19 +103,126 @@ def _(nf):
 def _(nf):
     nf.slide(
         nf.lead(
-            "Every layer of the stack is open source, and every layer has a "
-            "managed equivalent someone will try to sell you."
+            "A data platform provides a centralized solution for managing and interacting with data. It may include services for:"
         ),
         nf.bullets(
             [
-                "**Ingestion** - the part everyone underestimates",
-                "**Storage** - object storage plus an open table format",
-                "**Transformation** - where the lock-in usually hides",
-                "**Serving** - the only layer your users actually see",
+                "Ingestion - receive data from external sources",
+                "Storage - data in buckets, databases, data warehouses, or lakehouses",
+                "Transformation - manipulating, joining, aggregating data",
+                "Observability",
+                "Orchestration",
+                "Development tooling - CI/CD, testing, versioning",
+                "Visualization - gain insight from charts, dashboards",
+                "Governance - data access policies, encryption policies, lineage, catalogue, compliance",
+                "Infrastructure - for running all of the above"
             ]
         ),
-        title="Four layers",
-        page=4,
+        title="Data platform? What do you mean?",
+    )
+    return
+
+
+@app.cell
+def _(assets, mo, nf, theme):
+    # Pick a platform to see how it fills in the components from the previous slide.
+    # (name, logo, note) per component. Drop logo files into presentation/images/logos/
+    # - anything missing falls back to an initials chip, so the slide always reads.
+    _PLATFORMS = {
+        "Microsoft Fabric": (
+            "logos/fabric.png",
+            {
+                "Ingestion": [("Data Factory", "logos/fabric-data-factory.png", "pipelines, copy job")],
+                "Storage": [("OneLake", "logos/onelake.png", "Delta Parquet")],
+                "Transformation": [("Notebooks", "logos/fabric-notebooks.png", "Spark"),
+                                   ("Dataflows Gen2", "logos/dataflows.png", None)],
+                "Observability": [("Monitoring hub", "logos/fabric-monitor.png", None)],
+                "Orchestration": [("Data Factory", "logos/fabric-data-factory.png", "scheduled pipelines")],
+                "Dev tooling": [("Git integration", "logos/fabric-git.png", "deployment pipelines")],
+                "Visualization": [("Power BI", "logos/powerbi.png", "Direct Lake")],
+                "Governance": [("Purview", "logos/purview.png", None)],
+                "Infrastructure": [("Fabric capacity", "logos/fabric.png", "SaaS, F SKUs")],
+            },
+        ),
+        "Databricks": (
+            "logos/databricks.png",
+            {
+                "Ingestion": [("Lakeflow Connect", "logos/lakeflow.png", "Auto Loader")],
+                "Storage": [("Delta Lake", "logos/delta-lake.png", "on S3 / ADLS")],
+                "Transformation": [("Apache Spark", "logos/spark.png", None),
+                                   ("Declarative Pipelines", "logos/lakeflow.png", "ex-DLT")],
+                "Observability": [("Lakehouse Monitoring", "logos/databricks.png", "system tables")],
+                "Orchestration": [("Lakeflow Jobs", "logos/lakeflow.png", "ex-Workflows")],
+                "Dev tooling": [("Asset Bundles", "logos/databricks.png", "Repos, CLI")],
+                "Visualization": [("AI/BI Dashboards", "logos/aibi.png", "Genie")],
+                "Governance": [("Unity Catalog", "logos/unity-catalog.png", None)],
+                "Infrastructure": [("Your cloud account", "logos/databricks.png", "clusters, SQL warehouses")],
+            },
+        ),
+        "Snowflake": (
+            "logos/snowflake.png",
+            {
+                "Ingestion": [("Snowpipe", "logos/snowpipe.png", "+ Streaming")],
+                "Storage": [("Snowflake tables", "logos/snowflake.png", None),
+                            ("Iceberg tables", "logos/iceberg.png", "external volumes")],
+                "Transformation": [("Dynamic Tables", "logos/dynamic-tables.png", None),
+                                   ("Snowpark", "logos/snowpark.png", "Python")],
+                "Observability": [("Snowflake Trail", "logos/snowflake.png", "account usage")],
+                "Orchestration": [("Streams & Tasks", "logos/snowflake-tasks.png", None)],
+                "Dev tooling": [("Snowflake CLI", "logos/snowflake-cli.png", "Git integration")],
+                "Visualization": [("Snowsight", "logos/snowsight.png", "dashboards"),
+                                  ("Streamlit", "logos/streamlit.png", "in Snowflake")],
+                "Governance": [("Horizon Catalog", "logos/horizon.png", None)],
+                "Infrastructure": [("Virtual warehouses", "logos/snowflake.png", "SaaS")],
+            },
+        ),
+    }
+
+
+    def _tab_label(_name, _logo):
+        """Tab labels run through mo.md, so an inline <img> renders in the tab strip."""
+        if not assets.exists(_logo):
+            return _name
+        _mark = assets.img(
+            _logo, width="auto", rounded=False, alt=_name,
+            style={"height": "1.1em", "object-fit": "contain",
+                   "display": "inline-block", "vertical-align": "middle"},
+        ).text
+        return f"{_mark} {_name}"
+
+
+    nf.slide(
+        mo.ui.tabs(
+            {
+                _tab_label(_name, _logo): nf.stack(
+                    [
+                        (_component, [nf.tool(*_svc, height=theme.pt(22), layout="row") for _svc in _services])
+                        for _component, _services in _layers.items()
+                    ],
+                    columns=3,
+                    gap=theme.SPACE["tight"],
+                )
+                for _name, (_logo, _layers) in _PLATFORMS.items()
+            }
+        ),
+        title="Data Platforms",
+        pad_top=theme.scale(40),
+    )
+    return
+
+
+@app.cell
+def _(nf):
+    nf.slide(
+        title="Data formats"
+    )
+    return
+
+
+@app.cell
+def _(nf):
+    nf.slide(
+        title="Data ingestion tools"
     )
     return
 
@@ -127,6 +268,12 @@ def _(nf):
         kicker="Nearform OSS",
         page=6,
     )
+    return
+
+
+@app.cell
+def _(nf):
+    nf.section("What we are building", kicker="OS Data Platform")
     return
 
 
