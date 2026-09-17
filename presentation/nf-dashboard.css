@@ -1,0 +1,100 @@
+/* Nearform-branded skin for co2_gdp_dashboard.py.
+
+   Scope is intentionally narrow: only this notebook's own output content
+   gets the brand treatment - each `.marimo-cell` (plain, literal colors,
+   not marimo's shared design tokens), `.markdown.prose` text, the code
+   editor, and the console strip. Charts are themed separately via the
+   `nearform` Altair theme in the notebook itself, not by this file.
+
+   marimo's shared design tokens (`--background`, `--foreground`, `--card`,
+   `--popover`, `--primary`, `--accent`, `--border`, `--input`, `--link`,
+   ...) are deliberately left untouched. They drive dropdowns, popovers, the
+   command palette, the settings dialog, checkboxes, switches and sliders
+   app-wide, in places far from the notebook (no portal boundary, so they
+   share the page's DOM/CSS cascade) - overriding them broke those
+   components, because marimo's own markup pairs them up (e.g. `bg-
+   background text-foreground` together) and a partial or global override
+   desyncs a pairing somewhere outside this file's control. */
+
+:root,
+.marimo {
+  --marimo-text-font: "Inter", "Inter var", -apple-system, BlinkMacSystemFont,
+    "Helvetica Neue", Arial, sans-serif;
+  --marimo-heading-font: var(--marimo-text-font);
+}
+
+body {
+  font-family: var(--marimo-text-font);
+}
+
+.marimo-cell {
+  background-color: #000e38 !important;
+  color: #ffffff;
+}
+
+/* Tailwind Typography keeps its own palette, independent of the tokens
+   above - point every `mo.md()` output at the brand colors too. */
+.markdown.prose {
+  --tw-prose-body: #ffffff;
+  --tw-prose-headings: #ffffff;
+  --tw-prose-lead: #8f9ab8;
+  --tw-prose-links: #00e5a4;
+  --tw-prose-bold: #ffffff;
+  --tw-prose-counters: #8f9ab8;
+  --tw-prose-bullets: #31416f;
+  --tw-prose-hr: #1e2a54;
+  --tw-prose-quotes: #ddcaff;
+  --tw-prose-quote-borders: #1e2a54;
+  --tw-prose-captions: #8f9ab8;
+  --tw-prose-code: #00e5a4;
+  --tw-prose-pre-code: #ffffff;
+  --tw-prose-pre-bg: #0a1440;
+  --tw-prose-th-borders: #1e2a54;
+  --tw-prose-td-borders: #1e2a54;
+  font-family: var(--marimo-text-font);
+}
+.markdown.prose :is(h1, h2, h3, h4, h5, h6) {
+  font-family: var(--marimo-heading-font);
+}
+
+/* CodeMirror ships its own light theme (a white editor background, black
+   default text) independent of the tokens above - only the background/base
+   text need a brand override; syntax-highlight token colors stay as-is.
+   Literal colors here (not `var(--card)` etc.) so this stays decoupled from
+   marimo's shared component tokens. */
+.cm-editor {
+  background-color: #0a1440 !important;
+}
+.cm-editor .cm-content,
+.cm-editor .cm-line {
+  color: #ffffff;
+}
+.cm-editor .cm-gutters {
+  background-color: #0a1440 !important;
+  color: #8f9ab8 !important;
+  border-color: #1e2a54 !important;
+}
+.cm-editor .cm-activeLine {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+.cm-editor .cm-cursor {
+  border-left-color: #ffffff;
+}
+.cm-editor .cm-selectionBackground {
+  background-color: rgba(0, 229, 164, 0.15) !important;
+}
+
+/* The dimmed one-line "peek" of a collapsed cell's code (marimo's own
+   opacity-20 ghost preview) reads as illegible pale static once the editor
+   beneath it is dark - hide it rather than fight CodeMirror's theme layers
+   for one low-value affordance. */
+.cm.opacity-20 {
+  display: none;
+}
+
+/* The (usually-empty) console/stdout strip under every cell is painted with
+   a Radix gray token (`--gray-1`, near-white) that isn't part of the
+   background/foreground pair above - point it at a literal brand color. */
+.console-output-area {
+  background-color: #0a1440 !important;
+}

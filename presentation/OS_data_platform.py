@@ -13,7 +13,7 @@ import marimo
 __generated_with = "0.24.0"
 app = marimo.App(
     width="medium",
-    layout_file="layouts/example_deck.slides.json",
+    layout_file="layouts/OS_data_platform.slides.json",
     css_file="template/nearform.css",
 )
 
@@ -31,11 +31,36 @@ def _():
 def _(mo):
     mo.md(r"""
     # Index
-    - Title
-    - Speaker presentation
-    - Agenda
-    - What is a data platform
-    - Data platforms and their services (comparison of services: Fabric, Databricks, Snowflake)
+    - Intro 5:00
+        - Title :15
+        - Speaker presentation :45
+        - Nearform :45
+        - Agenda :30
+        - From raw data to dashboards 1:00
+        - What is a data platform 1:00
+            - Data sources -> Transform -> Data Store -> Visualization
+    - Data platforms and their services (comparison of services: Fabric, Databricks, Snowflake) 2:00
+    - OS technologies 20:00
+        - postgres 3:00 - https://db-engines.com/en/ranking
+        - duckdb 3:00
+        - clickhouse 2:00
+        - airflow/prefect 1:00
+        - data formats (parquet/delta/iceberg) 5:00
+        - Data governance
+    - Data visualization 7:30
+        - pros and cons of power bi - features - values in one filter depend on previous filter
+        - superset/metabase
+        - Coding your own dashboard
+        - perspective
+    - Pros and cons of open source 7:30
+        - Cost - infrastructure/memory/compute/storage, licenses, info from Adriano Sanges talk
+            - 47% of developers work in companies <100 employees. Power BI developer probably work in bigger firms
+        - Lock-in effects - proprietary software, programming languages
+        - Technical skills
+        - Features - open source lets you implement whatever you want, managed data platforms already implement almost anything you would ever want
+        - One-stop shop
+        - Maintenance, SLAs
+        - Performance
     """)
     return
 
@@ -44,8 +69,16 @@ def _(mo):
 def _(mo):
     mo.md(r"""
     # notes
-    The increases in main-memory sizes over the last decade have made pure in-memory database systems feasible, and in-memory systems offer unprecedented performance. However, DRAM is still relatively expensive, and the growth of main-memory sizes has slowed down. In contrast, the prices for SSDs have fallen substantially in the last years, and their read bandwidth has increased to gigabytes per second. This makes it attractive to combine a large in-memory buffer with fast SSDs as storage devices, combining the excellent performance for the in-memory working set with the scalability of a disk-based system.
+    - The increases in main-memory sizes over the last decade have made pure in-memory database systems feasible, and in-memory systems offer unprecedented performance. However, DRAM is still relatively expensive, and the growth of main-memory sizes has slowed down. In contrast, the prices for SSDs have fallen substantially in the last years, and their read bandwidth has increased to gigabytes per second. This makes it attractive to combine a large in-memory buffer with fast SSDs as storage devices, combining the excellent performance for the in-memory working set with the scalability of a disk-based system.
     - SSAS vertipaq import mode can be considered in-memory
+    - Many data platform are starting to focus on open source technology at its core, and they support open data formats.
+        - Parquet, Delta, Iceberg formats
+    - Postgres, DuckDB, Airflow/prefect, dbt, Clickhouse
+    - Open source business models (community driven, foundations, backed by companies)
+    - Open source good for academia or government
+    - Proprietary platform and tools have lock-in effects
+    - https://duckdblabs.github.io/db-benchmark/
+    - Jordan Tigani - big data is dead
     """)
     return
 
@@ -76,6 +109,19 @@ def _(assets, nf):
         ],
         page=2,
     )
+    return
+
+
+@app.cell
+def _(nf):
+    nf.slide(
+        title="Is it possible to create great dashboards from raw data using open source technologies?", align='center'
+    )
+    return
+
+
+@app.cell
+def _():
     return
 
 
@@ -214,6 +260,9 @@ def _(assets, mo, nf, theme):
 @app.cell
 def _(nf):
     nf.slide(
+        nf.bullets(
+            ["Parquet", "Delta", "Iceberg"]
+        ),
         title="Data formats"
     )
     return
@@ -222,7 +271,40 @@ def _(nf):
 @app.cell
 def _(nf):
     nf.slide(
+        nf.bullets(
+            ["Trino", "Airbyte"]
+        ),
         title="Data ingestion tools"
+    )
+    return
+
+
+@app.cell
+def _(nf):
+    nf.slide(
+        nf.bullets(
+            ["Airflow", "Prefect"]
+        ),
+        title="Orchestration"
+    )
+    return
+
+
+@app.cell
+def _(nf):
+    nf.slide(
+        nf.bullets(
+            ["spark", "dbt"]
+        ),
+        title="Transformation"
+    )
+    return
+
+
+@app.cell
+def _(nf):
+    nf.slide(
+        title="Data storage"
     )
     return
 
