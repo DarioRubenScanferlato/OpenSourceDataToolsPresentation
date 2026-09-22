@@ -5,7 +5,9 @@
       {
         "type": "skip"
       },
-      {},
+      {
+        "type": "skip"
+      },
       {
         "type": "skip"
       },
@@ -17,22 +19,56 @@
         "type": "slide",
         "speakerNotes": "30 seconds. Then move."
       },
-      {},
-      {},
       {
         "type": "slide",
-        "speakerNotes": "Four layers. Do not go deep here."
+        "speakerNotes": "The big question. Let it land, then move."
       },
-      {},
-      {},
-      {},
-      {},
-      {},
-      {},
-      {},
+      {
+        "type": "skip"
+      },
       {
         "type": "slide",
-        "speakerNotes": "Credibility slide. 20 seconds max."
+        "speakerNotes": "The roadmap - what this talk actually answers."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Four services really, dressed up nine ways."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Click through a tab or two live."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "The foundation. Keep this quick - it's setup for the next slide."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "The 'aha' slide - transactions on top of plain files. Delta Lake came from Databricks, Iceberg from Netflix - both open specs now. Mention schema evolution (add/rename/drop a column, old files stay readable) if there's time."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Closes the loop back to the platform comparison."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Trino and Airbyte, one line each."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Airflow is the safe choice, Prefect is the fun one."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Spark for scale, dbt for SQL people."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Postgres, DuckDB, ClickHouse - just the names for now."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Fast: two stats, then move on."
       },
       {
         "type": "slide",
@@ -44,7 +80,7 @@
       },
       {
         "type": "slide",
-        "speakerNotes": "Read the quote, do not paraphrase it."
+        "speakerNotes": "Read the quote, don't paraphrase it."
       },
       {
         "type": "slide",
@@ -60,7 +96,7 @@
       },
       {
         "type": "slide",
-        "speakerNotes": "Resources - leave this up during Q&A setup."
+        "speakerNotes": "Leave this up during Q&A setup."
       },
       {
         "type": "slide",

@@ -100,6 +100,7 @@ def branding(alt, nf):
         CONTINENT_COLORS,
         NF_CATEGORICAL,
         NF_FG,
+        NF_RULE,
         NF_SEQUENTIAL,
         SOURCE_COLORS,
         nf_scale,
@@ -122,7 +123,7 @@ def grid_layout():
     #: Shared row height so same-row charts (matched widths summing to 12
     #: columns) line up top and bottom, not just left and right.
     ROW_HEIGHT = 380
-    return ROW_HEIGHT, WIDTH_HALF, WIDTH_THIRD, WIDTH_TWO_THIRDS
+    return ROW_HEIGHT, WIDTH_FULL, WIDTH_HALF, WIDTH_TWO_THIRDS
 
 
 @app.cell(hide_code=True)
@@ -170,76 +171,170 @@ def continent_mapping(df_countries, pc, pycountry):
 
 
 @app.cell(hide_code=True)
-def map_heading(mo):
-    mo.md("""
-    ## World Map — CO2 Emissions per Capita
+def explorer_heading(mo):
+    mo.md(r"""
+    ## Linked Explorer — World Map, Top Emitters & GDP vs CO2
+
+    These three views share one selection: **click a country** in the map,
+    the bar chart, or the scatter plot to highlight it in all three at once
+    (double-click to clear). All three read the same year.
     """)
     return
 
 
 @app.cell(hide_code=True)
-def map_controls(df_geo, mo):
-    _map_years = sorted(df_geo.loc[df_geo["co2_per_capita"].notna(), "year"].unique())
-    map_year = mo.ui.slider(
-        start=int(_map_years[0]),
-        stop=int(_map_years[-1]),
-        value=2021 if 2021 in _map_years else int(_map_years[-1]),
+def explorer_controls(df_geo, mo):
+    _explorer_years = sorted(
+        df_geo.loc[
+            df_geo["co2_per_capita"].notna() & df_geo["gdp"].notna() & df_geo["population"].notna(),
+            "year",
+        ].unique()
+    )
+    explorer_year = mo.ui.slider(
+        start=int(_explorer_years[0]),
+        stop=int(_explorer_years[-1]),
+        value=2021 if 2021 in _explorer_years else int(_explorer_years[-1]),
         step=1,
         label="Year",
         full_width=True,
     )
-    map_year
-    return (map_year,)
+    explorer_top_n = mo.ui.slider(start=5, stop=30, value=15, step=1, label="Top N countries (bar)")
+    explorer_metric = mo.ui.radio(
+        options={"Total CO2 (Mt)": "co2", "CO2 per capita (t)": "co2_per_capita"},
+        value="Total CO2 (Mt)",
+        label="Bar chart metric",
+    )
+    mo.hstack([explorer_year, explorer_top_n, explorer_metric], justify="start", gap=2)
+    return explorer_metric, explorer_top_n, explorer_year
 
 
 @app.cell(hide_code=True)
-def map_chart(
+def explorer_chart(
+    CONTINENT_COLORS,
+    NF_RULE,
     NF_SEQUENTIAL,
     ROW_HEIGHT,
-    WIDTH_HALF,
+    WIDTH_FULL,
     alt,
     df_geo,
-    map_year,
+    explorer_metric,
+    explorer_top_n,
+    explorer_year,
+    mo,
+    nf_scale,
     pycountry,
     vega_data,
 ):
-    def iso3_to_numeric(iso3: str) -> int | None:
+    def _iso3_to_numeric(iso3: str) -> int | None:
         try:
             return int(pycountry.countries.get(alpha_3=iso3).numeric)
         except (AttributeError, TypeError):
             return None
 
 
-    _map_df = df_geo[
-        (df_geo["year"] == map_year.value) & df_geo["co2_per_capita"].notna()
-    ][["iso_code", "country", "co2_per_capita"]].copy()
-    _map_df["id"] = _map_df["iso_code"].map(iso3_to_numeric)
+    _year_df = df_geo[df_geo["year"] == explorer_year.value].copy()
+    _year_df["gdp_per_capita"] = _year_df["gdp"] / _year_df["population"]
 
+    country_sel = alt.selection_point(
+        fields=["country"], on="click", clear="dblclick", empty="all", name="country_sel"
+    )
+
+    # --- World map ---
+    _map_df = _year_df[_year_df["co2_per_capita"].notna()][
+        ["iso_code", "country", "co2_per_capita"]
+    ].copy()
+    _map_df["id"] = _map_df["iso_code"].map(_iso3_to_numeric)
     _world = alt.topo_feature(vega_data.world_110m.url, "countries")
 
-    world_map_chart = (
-        alt.Chart(_world)
-        .mark_geoshape(stroke="white", strokeWidth=0.3)
+    _explorer_map = (
+        alt.Chart(_world, width=680, height=ROW_HEIGHT, title="CO2 per capita")
+        .mark_geoshape(stroke=NF_RULE, strokeWidth=0.3)
         .transform_lookup(
-            lookup="id",
-            from_=alt.LookupData(_map_df, "id", ["country", "co2_per_capita"]),
+            lookup="id", from_=alt.LookupData(_map_df, "id", ["country", "co2_per_capita"])
         )
         .encode(
             color=alt.Color(
                 "co2_per_capita:Q",
                 scale=alt.Scale(range=NF_SEQUENTIAL),
-                title="t CO2 / capita",
+                title="t CO2/capita",
+                legend=alt.Legend(orient="bottom"),
             ),
+            opacity=alt.condition(country_sel, alt.value(1.0), alt.value(0.25)),
             tooltip=[
                 alt.Tooltip("country:N", title="Country"),
                 alt.Tooltip("co2_per_capita:Q", title="t CO2/capita", format=".2f"),
             ],
         )
         .project("naturalEarth1")
-        .properties(width=WIDTH_HALF, height=ROW_HEIGHT, title=f"CO2 per capita, {map_year.value}")
+        .add_params(country_sel)
     )
 
-    world_map_chart
+    # --- Top emitters bar chart ---
+    _metric_title = [k for k, v in explorer_metric.options.items() if v == explorer_metric.value][0]
+    _bar_df = _year_df[_year_df[explorer_metric.value].notna()].nlargest(
+        explorer_top_n.value, explorer_metric.value
+    )
+
+    _explorer_bar = (
+        alt.Chart(_bar_df, width=480, height=ROW_HEIGHT, title=f"Top {explorer_top_n.value} emitters")
+        .mark_bar()
+        .encode(
+            x=alt.X(f"{explorer_metric.value}:Q", title=_metric_title),
+            y=alt.Y("country:N", sort="-x", title=None),
+            color=alt.condition(
+                country_sel,
+                alt.Color("continent:N", scale=nf_scale(CONTINENT_COLORS), legend=None),
+                alt.value(NF_RULE),
+            ),
+            opacity=alt.condition(country_sel, alt.value(1.0), alt.value(0.35)),
+            tooltip=[
+                alt.Tooltip("country:N", title="Country"),
+                alt.Tooltip(f"{explorer_metric.value}:Q", title=_metric_title, format=",.2f"),
+            ],
+        )
+        .add_params(country_sel)
+    )
+
+    # --- GDP vs CO2 scatter ---
+    _gap_df = _year_df[
+        _year_df["gdp_per_capita"].notna()
+        & _year_df["co2_per_capita"].notna()
+        & _year_df["population"].notna()
+        & (_year_df["gdp_per_capita"] > 0)
+        & (_year_df["co2_per_capita"] > 0)
+    ]
+
+    _explorer_scatter = (
+        alt.Chart(_gap_df, width=WIDTH_FULL, height=320, title="GDP per capita vs CO2 per capita")
+        .mark_circle()
+        .encode(
+            x=alt.X("gdp_per_capita:Q", title="GDP per capita ($)", scale=alt.Scale(type="log")),
+            y=alt.Y("co2_per_capita:Q", title="CO2 per capita (t)", scale=alt.Scale(type="log")),
+            size=alt.Size(
+                "population:Q", title="Population", scale=alt.Scale(range=[20, 2000]), legend=None
+            ),
+            color=alt.condition(
+                country_sel,
+                alt.Color("continent:N", scale=nf_scale(CONTINENT_COLORS), title="Continent"),
+                alt.value(NF_RULE),
+            ),
+            opacity=alt.condition(country_sel, alt.value(0.85), alt.value(0.15)),
+            tooltip=[
+                alt.Tooltip("country:N", title="Country"),
+                alt.Tooltip("gdp_per_capita:Q", title="GDP/capita", format=",.0f"),
+                alt.Tooltip("co2_per_capita:Q", title="CO2/capita (t)", format=",.2f"),
+                alt.Tooltip("population:Q", title="Population", format=",.0f"),
+            ],
+        )
+        .add_params(country_sel)
+    )
+
+    explorer_chart = mo.ui.altair_chart(
+        (alt.hconcat(_explorer_map, _explorer_bar) & _explorer_scatter)
+        .resolve_scale(color="independent")
+        .resolve_legend(color="independent")
+    )
+    explorer_chart
     return
 
 
@@ -572,144 +667,6 @@ def line_chart(
         .properties(width=WIDTH_HALF, height=ROW_HEIGHT, title=f"{_metric_title} over time")
     )
     line_chart
-    return
-
-
-@app.cell(hide_code=True)
-def gapminder_heading(mo):
-    mo.md("""
-    ## GDP vs CO2 — a "Gapminder" View
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def gapminder_controls(df_geo, mo):
-    _gap_years = sorted(
-        df_geo.loc[
-            df_geo["gdp"].notna() & df_geo["co2_per_capita"].notna() & df_geo["population"].notna(),
-            "year",
-        ].unique()
-    )
-    gap_year = mo.ui.slider(
-        start=int(_gap_years[0]),
-        stop=int(_gap_years[-1]),
-        value=2021 if 2021 in _gap_years else int(_gap_years[-1]),
-        step=1,
-        label="Year",
-        full_width=True,
-    )
-    gap_year
-    return (gap_year,)
-
-
-@app.cell(hide_code=True)
-def gapminder_chart(
-    CONTINENT_COLORS,
-    ROW_HEIGHT,
-    WIDTH_HALF,
-    alt,
-    df_geo,
-    gap_year,
-    nf_scale,
-):
-    _gap_df = df_geo[
-        (df_geo["year"] == gap_year.value)
-        & df_geo["gdp"].notna()
-        & df_geo["co2_per_capita"].notna()
-        & df_geo["population"].notna()
-        & (df_geo["co2_per_capita"] > 0)
-    ].copy()
-    _gap_df["gdp_per_capita"] = _gap_df["gdp"] / _gap_df["population"]
-    _gap_df = _gap_df[_gap_df["gdp_per_capita"] > 0]
-
-    gapminder_chart = (
-        alt.Chart(_gap_df)
-        .mark_circle(opacity=0.75)
-        .encode(
-            x=alt.X("gdp_per_capita:Q", title="GDP per capita ($)", scale=alt.Scale(type="log")),
-            y=alt.Y("co2_per_capita:Q", title="CO2 per capita (t)", scale=alt.Scale(type="log")),
-            size=alt.Size("population:Q", title="Population", scale=alt.Scale(range=[20, 2000])),
-            color=alt.Color("continent:N", title="Continent", scale=nf_scale(CONTINENT_COLORS)),
-            tooltip=[
-                alt.Tooltip("country:N", title="Country"),
-                alt.Tooltip("gdp_per_capita:Q", title="GDP/capita", format=",.0f"),
-                alt.Tooltip("co2_per_capita:Q", title="CO2/capita (t)", format=",.2f"),
-                alt.Tooltip("population:Q", title="Population", format=",.0f"),
-            ],
-        )
-        .properties(width=WIDTH_HALF, height=ROW_HEIGHT, title=f"GDP per capita vs CO2 per capita, {gap_year.value}")
-        .interactive()
-    )
-    gapminder_chart
-    return
-
-
-@app.cell(hide_code=True)
-def bar_heading(mo):
-    mo.md("""
-    ## Top Emitters
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def bar_controls(df_countries, mo):
-    bar_year = mo.ui.slider(
-        start=1900,
-        stop=int(df_countries["year"].max()),
-        value=int(df_countries["year"].max()),
-        step=1,
-        label="Year",
-        full_width=True,
-    )
-    bar_top_n = mo.ui.slider(start=5, stop=30, value=15, step=1, label="Top N countries")
-    bar_metric = mo.ui.radio(
-        options={"Total CO2 (Mt)": "co2", "CO2 per capita (t)": "co2_per_capita"},
-        value="Total CO2 (Mt)",
-        label="Metric",
-    )
-    mo.hstack([bar_year, bar_top_n, bar_metric], justify="start", gap=2)
-    return bar_metric, bar_top_n, bar_year
-
-
-@app.cell(hide_code=True)
-def bar_chart(
-    CONTINENT_COLORS,
-    WIDTH_THIRD,
-    alt,
-    bar_metric,
-    bar_top_n,
-    bar_year,
-    df_geo,
-    nf_scale,
-):
-    _metric_title = [k for k, v in bar_metric.options.items() if v == bar_metric.value][0]
-
-    _bar_df = (
-        df_geo[(df_geo["year"] == bar_year.value) & df_geo[bar_metric.value].notna()]
-        .nlargest(bar_top_n.value, bar_metric.value)
-    )
-
-    bar_chart = (
-        alt.Chart(_bar_df)
-        .mark_bar()
-        .encode(
-            x=alt.X(f"{bar_metric.value}:Q", title=_metric_title),
-            y=alt.Y("country:N", sort="-x", title=None),
-            color=alt.Color("continent:N", title="Continent", scale=nf_scale(CONTINENT_COLORS)),
-            tooltip=[
-                alt.Tooltip("country:N", title="Country"),
-                alt.Tooltip(f"{bar_metric.value}:Q", title=_metric_title, format=",.2f"),
-            ],
-        )
-        .properties(
-            width=WIDTH_THIRD,
-            height=alt.Step(20),
-            title=f"Top {bar_top_n.value} emitters by {_metric_title}, {bar_year.value}",
-        )
-    )
-    bar_chart
     return
 
 

@@ -1,11 +1,11 @@
-"""Reference deck - one slide per helper in ``template/``.
+"""From raw data to dashboard with open source software.
 
-Run it:      uv run marimo edit presentation/example_deck.py
-Present it:  uv run marimo run presentation/example_deck.py --include-code
+Ticino Data Conference, 2026. Speaker notes and slide order live in
+``layouts/OS_data_platform.slides.json`` - regenerate it after adding or
+removing cells with the script at the bottom of this file (see the last cell).
 
-Copy this file as the starting point for the real talk, delete what you don't
-need, and keep ``layouts/example_deck.slides.json`` in step with the cell list
-(see the last cell, or rebuild the layout in the app-preview dropdown).
+Run it:      uv run marimo edit presentation/OS_data_platform.py
+Present it:  uv run marimo run presentation/OS_data_platform.py --include-code --no-show-tracebacks
 """
 
 import marimo
@@ -53,6 +53,7 @@ def _(mo):
         - Coding your own dashboard
         - perspective
     - Pros and cons of open source 7:30
+        - Decision drivers when deciding between open source or managed data platform
         - Cost - infrastructure/memory/compute/storage, licenses, info from Adriano Sanges talk
             - 47% of developers work in companies <100 employees. Power BI developer probably work in bigger firms
         - Lock-in effects - proprietary software, programming languages
@@ -260,10 +261,64 @@ def _(assets, mo, nf, theme):
 @app.cell
 def _(nf):
     nf.slide(
-        nf.bullets(
-            ["Parquet", "Delta", "Iceberg"]
+        nf.tool(
+            "Parquet",
+            "logos/parquet.svg",
+            layout="row",
         ),
-        title="Data formats"
+        nf.lead(
+            "A columnar file format: values for one column sit together on disk, "
+            "instead of row by row."
+        ),
+        nf.bullets(
+            [
+                "Column-by-column storage means better compression, and a query only reads the columns it actually needs",
+                "Files are split into row groups, each carrying per-column stats (min/max) so engines can skip whole chunks that can't match a filter",
+                "It's just a file format - no transactions, no built-in idea of which files make up 'the table' right now",
+            ]
+        ),
+        title="Parquet: the file everything else builds on",
+        kicker="Data formats",
+    )
+    return
+
+
+@app.cell
+def _(nf, theme):
+    nf.slide(
+        nf.two_col(
+            nf.tool("Iceberg", "logos/iceberg.svg", layout="row", height=theme.pt(22)),
+            nf.tool("Delta Lake", None, layout="row"),
+        ),
+        nf.lead(
+            "A folder of Parquet files has no idea which files are 'current'. "
+            "These formats fix that with a transaction log."
+        ),
+        nf.bullets(
+            [
+                "Every write appends an entry to a log of metadata files (Delta's _delta_log, Iceberg's manifests) - a reader picks a version and knows exactly which Parquet files belong to it",
+                "That log is what buys you ACID transactions, safe concurrent writes, and time travel - query the table as it looked yesterday",
+            ]
+        ),
+        title="Tables, not just files",
+        kicker="Data formats",
+    )
+    return
+
+
+@app.cell
+def _(nf):
+    nf.slide(
+        nf.bullets(
+            [
+                "Databricks: Delta Lake is the default table format - Unity Catalog is built around it",
+                "Snowflake: 'Iceberg Tables' read and write the open format directly on your own storage",
+                "Microsoft Fabric: OneLake stores everything as Delta Parquet, and reads Iceberg via shortcuts",
+                "The 'swap the pieces without lock-in' pitch already ships as a checkbox in the platforms you're paying for",
+            ]
+        ),
+        title="Even the managed platforms run on this",
+        kicker="Data formats",
     )
     return
 

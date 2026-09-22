@@ -12,8 +12,21 @@ PNG with transparency (or SVG) works best; they're height-constrained and
 
 Fetched from Simple Icons (official brand colours) and Wikimedia Commons:
 
-    databricks.svg  snowflake.svg  spark.svg  streamlit.svg
+    databricks.svg  snowflake.svg  spark.svg    streamlit.svg
     fabric-git.svg  powerbi.svg    iceberg.svg
+
+Fetched from Simple Icons for the OS technologies slides. Current Simple Icons
+releases ship the path data without a `fill`, so the hex from each icon's own
+`simple-icons.json` entry was added onto the outer `<svg>` by hand (same
+convention as the files above):
+
+    postgresql.svg  duckdb.svg   clickhouse.svg  airflow.svg
+    prefect.svg     trino.svg    airbyte.svg     superset.svg
+    metabase.svg    parquet.svg  nodejs.svg
+
+dbt has no icon on Simple Icons any more (its current mark is a two-colour
+gradient, not a flat brand colour) - the "dbt" tool on the Transformation
+slide falls back to the initials chip on purpose.
 
 The extension doesn't have to match what the slide asks for - `logos/x.png`
 finds `logos/x.svg`. Drop in a replacement under either name.
