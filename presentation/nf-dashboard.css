@@ -113,8 +113,9 @@ body {
   color-scheme: dark;
 }
 
-/* solar_dashboard.py only: the linked-explorer Vega-Lite chart and the stat
-   cards above it are both authored at a *fixed* pixel width
+/* solar_dashboard.py only: the linked-explorer Vega-Lite chart, the stat
+   cards above it and the filter row (whose columns line up with the cards)
+   are all authored at a *fixed* pixel width
    (`DASHBOARD_WIDTH` in that notebook's `grid_layout` cell - keep the
    number below in sync with it), which doesn't track this `width="full"`
    page's actual size the way the rest of the dashboard does. Both get
@@ -148,11 +149,13 @@ body {
    marimo puts around the whole custom element still visually scales the
    chart inside it correctly. */
 .react-grid-item:has(marimo-vega),
-.react-grid-item:has(.nf-stat-cards) {
+.react-grid-item:has(.nf-stat-cards),
+.react-grid-item:has(.nf-filters) {
   container-type: inline-size;
 }
 .react-grid-item:has(marimo-vega) > div,
-.react-grid-item:has(.nf-stat-cards) > div {
+.react-grid-item:has(.nf-stat-cards) > div,
+.react-grid-item:has(.nf-filters) > div {
   width: 1518px;
   zoom: calc(100cqw / 1518px);
 }

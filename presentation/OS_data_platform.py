@@ -38,7 +38,7 @@ def _(mo):
         - Agenda :30
         - From raw data to dashboards 1:00
         - What is a data platform 1:00
-            - Data sources -> Transform -> Data Store -> Visualization
+            - Data sources -> Transform -> Data Store -> Visualization -> cross-filters
     - Data platforms and their services (comparison of services: Fabric, Databricks, Snowflake) 2:00
     - OS technologies 20:00
         - postgres 3:00 - https://db-engines.com/en/ranking
@@ -48,7 +48,7 @@ def _(mo):
         - data formats (parquet/delta/iceberg) 5:00
         - Data governance
     - Data visualization 7:30
-        - pros and cons of power bi - features - values in one filter depend on previous filter
+        - pros and cons of power bi - features
         - superset/metabase
         - Coding your own dashboard
         - perspective
