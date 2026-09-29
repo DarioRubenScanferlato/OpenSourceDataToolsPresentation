@@ -42,11 +42,15 @@
       },
       {
         "type": "slide",
-        "speakerNotes": "Ingestion: three CSVs straight into pandas dataframes. Point out the raw shapes."
+        "speakerNotes": "Ingestion: raw files straight into pandas, one per source system - point at the repeated values in the sensor readings."
       },
       {
         "type": "slide",
-        "speakerNotes": "Transformation: one merge to attach plant names, so downstream code never repeats the join."
+        "speakerNotes": "Raw sensors lie: a stuck value repeats, a dropout is NaN. Three lines of pandas find both; interpolation fills short gaps."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Gold: hourly readings become daily energy, joined to what the grid operator paid - and self-consumption falls out as the difference."
       },
       {
         "type": "slide",

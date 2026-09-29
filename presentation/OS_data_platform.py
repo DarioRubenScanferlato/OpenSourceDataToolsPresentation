@@ -20,11 +20,13 @@ app = marimo.App(
 
 @app.cell
 def _():
+    import altair as alt
     import marimo as mo
+    import pandas as pd
 
     from template import assets, nf, theme
 
-    return assets, mo, nf, theme
+    return alt, assets, mo, nf, pd, theme
 
 
 @app.cell(hide_code=True)
@@ -217,25 +219,30 @@ def _(dashboard, full_bleed_slide):
 @app.cell
 def _(dashboard, mo, nf):
     _code = '''
-    DATA_DIR = Path("data/solar")
+    BRONZE = Path("data/solar/bronze")  # raw files, one per source system
 
-    dim_plants = pd.read_csv(DATA_DIR / "dim_plants.csv")
-    fact_billing = pd.read_csv(DATA_DIR / "fact_energy_billing.csv")
-    fact_maintenance = pd.read_csv(DATA_DIR / "fact_maintenance_events.csv")
+    plants = pd.read_csv(BRONZE / "plants.csv")                     # asset register
+    sensor_readings = pd.read_csv(BRONZE / "sensor_readings.csv.gz")  # SCADA, hourly
+    grid_settlement = pd.read_csv(BRONZE / "grid_settlement.csv")     # grid operator, daily
     '''
+    # Show the sensor readings around a stuck sensor, so the raw data's
+    # problems are visible straight away (the next slide deals with them).
+    _r = dashboard.defs["readings"].reset_index(drop=True)
+    _at = int(_r.index[_r["issue"] == "stuck"][0])
+    _raw_cols = ["timestamp", "plant_id", "sensor_id", "ac_power_kw"]
     nf.slide(
         nf.code(_code),
         # A tab per dataframe rather than all three side by side - three
         # wide tables at once didn't fit the slide; one at a time does.
         mo.ui.tabs(
             {
-                "dim_plants": nf.dataframe(dashboard.defs["dim_plants"], max_rows=5),
-                "fact_billing": nf.dataframe(dashboard.defs["fact_billing"], max_rows=5),
-                "fact_maintenance": nf.dataframe(dashboard.defs["fact_maintenance"], max_rows=5),
+                "sensor_readings": nf.dataframe(_r.iloc[_at - 2 : _at + 3][_raw_cols], max_rows=5),
+                "grid_settlement": nf.dataframe(dashboard.defs["grid_settlement"], max_rows=5),
+                "plants": nf.dataframe(dashboard.defs["plants"], max_rows=5),
             }
         ),
         title="Ingesting the raw data",
-        kicker="From CSV to dataframe",
+        kicker="Bronze: one file per source",
         # This slide is denser than most (code + tabs + a table): the
         # template's usual top margin and inter-block rhythm, sized for a
         # sparse title+bullets slide, left this one taller than the frame -
@@ -245,36 +252,120 @@ def _(dashboard, mo, nf):
     )
     return
 
-
 @app.cell
-def _(dashboard, nf):
+def _(alt, dashboard, nf, pd, theme):
     _code = '''
-    # join plant names into every fact table once, so charts and filters
-    # can work with "location" (plant name) directly
-    billing = fact_billing.merge(
-        dim_plants[["plant_id", "name", "country_code"]], on="plant_id"
+    readings = sensor_readings.sort_values(["sensor_id", "timestamp"])
+    power = readings["ac_power_kw"]
+
+    # a stuck sensor repeats the value it froze on - real output never does
+    run = (power != readings.groupby("sensor_id")["ac_power_kw"].shift()).cumsum()
+    stuck = (readings.groupby(run)["ac_power_kw"].transform("size") >= 3) & (power > 0)
+
+    # stuck + missing (NaN) readings: use the same hour the day before
+    readings["ac_power_kw_clean"] = (
+        power.mask(stuck)
+        .groupby(readings["sensor_id"])
+        .transform(lambda s: s.fillna(s.shift(24)))
     )
     '''
+    # One real faulty stretch from the data: the first stuck episode with
+    # a dropout (NaN) within a day and a half on the same sensor, shown
+    # with both in view plus some normal days around them.
+    _r = dashboard.defs["readings"]
+    _pick, _near = None, None
+    for _, _row in _r[_r["issue"] == "stuck"].iterrows():
+        _cand = _r[
+            (_r["sensor_id"] == _row["sensor_id"])
+            & (_r["issue"] == "missing")
+            & ((_r["timestamp"] - _row["timestamp"]).abs() <= pd.Timedelta(hours=36))
+        ]
+        if len(_cand):
+            _pick, _near = _row, _cand["timestamp"].iloc[0]
+            break
+    if _pick is None:
+        _pick = _r[_r["issue"] == "stuck"].iloc[0]
+        _near = _pick["timestamp"]
+    _lo = min(_pick["timestamp"], _near) - pd.Timedelta(hours=30)
+    _hi = max(_pick["timestamp"], _near) + pd.Timedelta(hours=30)
+    _win = _r[(_r["sensor_id"] == _pick["sensor_id"]) & _r["timestamp"].between(_lo, _hi)]
+    _lines = pd.concat(
+        [
+            _win.assign(series="Raw reading", kw=_win["ac_power_kw"]),
+            _win.assign(series="Cleaned", kw=_win["ac_power_kw_clean"]),
+        ]
+    )
+    _series = ["Raw reading", "Cleaned", "Stuck", "Missing (NaN)"]
+    _color = alt.Color(
+        "series:N",
+        title=None,
+        scale=alt.Scale(domain=_series, range=[theme.MUTED, theme.MINT, "#FF7A8A", theme.LAVENDER]),
+        legend=alt.Legend(orient="top", direction="horizontal"),
+    )
+    _x = alt.X("timestamp:T", title=None, axis=alt.Axis(format="%b %d %H:%M", labelAngle=0, tickCount=4))
+    _chart = (
+        alt.Chart(_lines)
+        .mark_line(strokeWidth=2)
+        .encode(
+            x=_x,
+            y=alt.Y("kw:Q", title="AC power (kW)"),
+            color=_color,
+            strokeDash=alt.StrokeDash("series:N", scale=alt.Scale(domain=["Raw reading", "Cleaned"], range=[[1, 0], [5, 3]]), legend=None),
+        )
+        + alt.Chart(_win[_win["issue"] == "stuck"].assign(series="Stuck"))
+        .mark_circle(size=70, opacity=1)
+        .encode(x=_x, y="ac_power_kw:Q", color=_color)
+        + alt.Chart(_win[_win["issue"] == "missing"].assign(series="Missing (NaN)"))
+        # no value to plot, so a tick along the bottom of the plot marks the hour
+        .mark_tick(thickness=3, size=14, opacity=1)
+        .encode(x=_x, y=alt.value(222), color=_color)
+    # fills its column, whatever the window size
+    ).properties(width="container", height=230, title=f"{_pick['sensor_id']}")
     nf.slide(
-        nf.code(_code),
-        nf.dataframe(dashboard.defs["billing"], max_rows=5),
-        title="Preparing it for visualization",
-        kicker="One join, not a repeated lookup",
+        nf.two_col(nf.code(_code), _chart, ratio=(1, 1)),
+        title="Spotting broken sensors",
+        kicker="Bronze to gold, step 1: clean",
+        pad_top="5cqw",
     )
     return
 
+@app.cell
+def _(dashboard, nf):
+    _code = '''
+    # hourly kW -> daily kWh per plant (one reading = one hour)
+    readings["date"] = readings["timestamp"].dt.tz_localize(None).dt.normalize()
+    daily = readings.groupby(["plant_id", "date"], as_index=False).agg(
+        energy_generated_kwh=("ac_power_kw_clean", "sum")
+    )
+    # join what the grid operator metered and paid, and the plant masterdata
+    gold = daily.merge(grid_settlement.rename(columns={"settlement_date": "date"})).merge(
+        plants[["plant_id", "name", "capacity_mw"]]
+    )
+    # derive what neither source has on its own
+    gold["self_consumption_kwh"] = (
+        gold["energy_generated_kwh"] - gold["energy_exported_kwh"] - gold["curtailment_kwh"]
+    ).clip(lower=0)
+    '''
+    _cols = [
+        "date", "name", "energy_generated_kwh", "energy_exported_kwh",
+        "curtailment_kwh", "self_consumption_kwh", "revenue_eur",
+    ]
+    nf.slide(
+        nf.code(_code),
+        nf.dataframe(dashboard.defs["gold"][_cols], max_rows=3),
+        title="From bronze to gold",
+        kicker="Step 2: aggregate, join, derive",
+        pad_top="5cqw",
+        gap="1.2cqw",
+    )
+    return
 
 @app.cell
 def _(dashboard, nf):
     _code = '''
-    # one row per (plant, day): that day's total energy, summed across
-    # whichever sensors belong to the plant
-    daily = billing.groupby(["name", "billing_date"], as_index=False)[
-        "energy_generated_kwh"
-    ].sum()
-
-    alt.Chart(daily).mark_area(line={"strokeWidth": 1.5}).encode(
-        x="billing_date:T",                              # date, on the x-axis
+    # gold is already one row per (plant, day)
+    alt.Chart(gold).mark_area(line={"strokeWidth": 1.5}).encode(
+        x="date:T",                                       # date, on the x-axis
         y=alt.Y(
             "energy_generated_kwh:Q",
             stack="zero",                                 # stack plants instead of overlapping them
@@ -304,7 +395,7 @@ def _(dashboard, nf):
 @app.cell
 def _(dashboard, mo):
     _plants = dashboard.defs["dim_plants"]
-    _billing = dashboard.defs["fact_billing"]
+    _gold = dashboard.defs["gold"]
     # Fresh widgets, not the *same* objects as the dashboard slide: a
     # marimo UI element is bound to exactly one live DOM mount, so
     # displaying `dashboard.defs["date_from"]` a second time here left a
@@ -317,8 +408,8 @@ def _(dashboard, mo):
     location_filter = mo.ui.multiselect(
         options=sorted(_plants["name"]), value=sorted(_plants["name"])
     )
-    date_from = mo.ui.date(value=_billing["billing_date"].min().date())
-    date_to = mo.ui.date(value=_billing["billing_date"].max().date())
+    date_from = mo.ui.date(value=_gold["date"].min().date())
+    date_to = mo.ui.date(value=_gold["date"].max().date())
     return date_from, date_to, location_filter
 
 
@@ -376,26 +467,26 @@ def _(date_from, date_to, location_filter, mo, nf):
 @app.cell
 def _(nf):
     _code = '''
-    plant_sel = alt.selection_point(
-        fields=["name"], on="click", clear="dblclick", empty="all"
-    )
+    plant_sel = alt.selection_point(fields=["name"], on="click", clear="dblclick")
 
-    # added to all four charts, then combined into one Vega-Lite spec
+    # table, line chart: dim the other plants
     chart.add_params(plant_sel).encode(
         opacity=alt.condition(plant_sel, alt.value(1.0), alt.value(0.2))
     )
+    # monthly P&L: keep only the selected plant's rows
+    alt.Chart(pnl_monthly).transform_filter(plant_sel)
     '''
     nf.slide(
         nf.code(_code),
         nf.bullets(
             [
-                "One selection object, reused across the map, the line chart, the sankey and the bar chart",
-                "Each chart dims everything except the selected plant via the same opacity condition",
-                "Vega-Lite recognizes the shared param and keeps every chart's click state in sync - no callbacks, no server round-trip",
+                "One selection object, shared by the table, the line chart, the sankey and the monthly P&L",
+                "Charts react in the browser: dimming the other plants, or switching to that plant's own numbers - no server round-trip",
+                "The KPI cards follow too: marimo sends the selection back to Python, which recomputes them",
             ]
         ),
         title="Crossfiltering, for free",
-        kicker="One selection, four charts",
+        kicker="One selection, the whole dashboard",
     )
     return
 

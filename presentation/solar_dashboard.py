@@ -18,8 +18,9 @@ def imports():
     import pandas as pd
 
     from template import theme as nf
+    from template.timeline import DateRangeTimeline
 
-    return Path, alt, mo, nf, pd, warnings
+    return DateRangeTimeline, Path, alt, mo, nf, pd, warnings
 
 
 @app.cell(hide_code=True)
@@ -37,24 +38,25 @@ def branding(alt, nf):
     #: competing with the brand accents drawn on top of it.
     NF_PANEL = "#0a1440"
 
-    #: One color per plant (7), assigned alphabetically - never cycled, so
-    #: no two plants share one. The brand accents plus two brand-derived
-    #: steps (a mint shade, a purple tint) in place of theme.py's PALE_BLUE,
-    #: which read as the same near-gray as PALE_MINT. Checked with the
-    #: dataviz skill's palette validator on NF_PANEL: in this order every
-    #: *adjacent* pair - neighbors in the stacked area and the sankey -
-    #: clears ΔE 31 (normal vision) / 21 (color-blind). The weakest pair
-    #: overall is BLUE vs PURPLE, never adjacent; the table and tooltips
-    #: always name plants too. The bright brand accents sit above the validator's
-    #: dark-mode lightness band by design.
+    #: One color per plant (8), assigned alphabetically - never cycled, so
+    #: no two plants share one. The brand accents plus brand-derived steps
+    #: (a mint shade, a purple tint, a mint-blue teal) in place of theme.py's
+    #: PALE_BLUE, which read as the same near-gray as PALE_MINT. Checked
+    #: with the dataviz skill's palette validator on NF_PANEL: in this order
+    #: every *adjacent* pair - neighbors in the stacked area - clears ΔE 31
+    #: (normal vision) / 21 (color-blind). The weakest pair overall is BLUE
+    #: vs PURPLE, never adjacent; the table and tooltips always name plants
+    #: too. The bright brand accents sit above the validator's dark-mode
+    #: lightness band by design.
     PLANT_COLORS = [
+        "#B18CFF",  # purple, one step lighter
+        nf.MINT,
+        nf.BLUE,
         nf.LAVENDER,
         nf.PURPLE,
         "#00B383",  # mint, one step darker
         nf.PALE_MINT,
-        nf.BLUE,
-        nf.MINT,
-        "#B18CFF",  # purple, one step lighter
+        "#0BA8D1",  # teal, between mint and blue
     ]
 
     #: Maintenance event types, in brand accents rather than a Vega scheme.
@@ -210,61 +212,118 @@ def grid_layout(FONT_MD, NF_FG, NF_PANEL, NF_RULE, alt):
 
 @app.cell(hide_code=True)
 def load_data(Path, pd):
-    # All five datasets were produced by the SolarDataPlatform project's
-    # `solar-data-gen` generator (7 synthetic plants, 60 days of daily
-    # billing/costs/alarms/maintenance) and copied into data/solar/ - see
-    # data/solar/README.md for how to regenerate them.
-    DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "solar"
+    # The raw ("bronze") data, one file per source system, as it would land
+    # in a platform: produced by the SolarDataPlatform project's
+    # `solar-data-gen` generator (8 synthetic plants over two years) and
+    # split per source by scripts/export_solar_bronze.py - see
+    # data/solar/README.md for how to regenerate it.
+    BRONZE = Path(__file__).resolve().parent.parent / "data" / "solar" / "bronze"
 
-    dim_plants = pd.read_csv(DATA_DIR / "dim_plants.csv", parse_dates=["commissioning_date"])
-    fact_billing = pd.read_csv(DATA_DIR / "fact_energy_billing.csv", parse_dates=["billing_date"])
-    fact_alarms = pd.read_csv(
-        DATA_DIR / "fact_alarm_events.csv", parse_dates=["triggered_at", "cleared_at"]
+    plants = pd.read_csv(BRONZE / "plants.csv", parse_dates=["commissioning_date", "decommissioning_date"])
+    sensor_readings = pd.read_csv(BRONZE / "sensor_readings.csv.gz", parse_dates=["timestamp"])
+    grid_settlement = pd.read_csv(BRONZE / "grid_settlement.csv", parse_dates=["settlement_date"])
+    costs_raw = pd.read_csv(BRONZE / "costs.csv", parse_dates=["cost_date"])
+    alarms_raw = pd.read_csv(BRONZE / "alarms.csv", parse_dates=["triggered_at", "cleared_at"])
+    maintenance_raw = pd.read_csv(BRONZE / "maintenance.csv", parse_dates=["scheduled_date", "completed_date"])
+    # the plant dimension everything else is keyed on
+    dim_plants = plants
+    return (
+        alarms_raw,
+        costs_raw,
+        dim_plants,
+        grid_settlement,
+        maintenance_raw,
+        plants,
+        sensor_readings,
     )
-    fact_maintenance = pd.read_csv(
-        DATA_DIR / "fact_maintenance_events.csv",
-        parse_dates=["scheduled_date", "completed_date"],
-    )
-    fact_costs = pd.read_csv(DATA_DIR / "fact_plant_costs.csv", parse_dates=["cost_date"])
-    return dim_plants, fact_alarms, fact_billing, fact_costs, fact_maintenance
 
 
 @app.cell(hide_code=True)
-def denormalize(dim_plants, fact_alarms, fact_billing, fact_costs, fact_maintenance):
-    # Every fact table only carries `plant_id`; join in the human-readable
-    # plant `name` once here so every downstream chart/filter can work with
-    # "location" (plant name) directly instead of repeating the join.
-    # `capacity_mw` rides along for the capacity-factor KPI.
-    _plant_names = dim_plants[["plant_id", "name", "country_code", "capacity_mw"]]
+def bronze_to_gold(
+    alarms_raw,
+    costs_raw,
+    grid_settlement,
+    maintenance_raw,
+    plants,
+    sensor_readings,
+):
+    # Bronze -> gold in one step: the SCADA sensor readings and the grid
+    # operator's settlement are separate sources that only meet here, in
+    # `gold` - one row per plant per day, everything the dashboard needs.
 
-    billing = fact_billing.merge(_plant_names, on="plant_id")
-    alarms = fact_alarms.merge(_plant_names, on="plant_id")
-    maintenance = fact_maintenance.merge(_plant_names, on="plant_id")
-    costs = fact_costs.merge(_plant_names, on="plant_id")
+    # 1. Clean the sensor readings. A dropout arrives as NaN; a *stuck*
+    #    sensor keeps repeating the value it froze on, which real output
+    #    never does (there's always some noise) - so the same non-zero
+    #    reading 3+ hours in a row is treated as missing too.
+    readings = sensor_readings.sort_values(["sensor_id", "timestamp"]).copy()
+    _power = readings["ac_power_kw"]
+    _run = (_power != readings.groupby("sensor_id")["ac_power_kw"].shift()).cumsum()
+    _run_length = readings.groupby(_run)["ac_power_kw"].transform("size")
+    readings["issue"] = "ok"
+    readings.loc[(_run_length >= 3) & (_power > 0), "issue"] = "stuck"
+    readings.loc[_power.isna(), "issue"] = "missing"
+    readings["ac_power_kw_clean"] = _power.where(readings["issue"] == "ok")
+
+    # 2. Fill each bad hour with the same hour the day before (24 readings
+    #    back): solar output follows the sun, so yesterday's profile is a
+    #    fair estimate - better than a straight line across a whole night.
+    #    Where yesterday's reading is bad too, the hour stays missing (and
+    #    shows up in `reading_coverage`).
+    readings["ac_power_kw_clean"] = readings.groupby("sensor_id")["ac_power_kw_clean"].transform(
+        lambda s: s.fillna(s.shift(24))
+    )
+
+    # 3. Hourly kW -> daily kWh per plant (one reading = one hour).
+    readings["date"] = readings["timestamp"].dt.tz_localize(None).dt.normalize()
+    daily = readings.groupby(["plant_id", "date"], as_index=False).agg(
+        energy_generated_kwh=("ac_power_kw_clean", "sum"),
+        reading_coverage=("ac_power_kw_clean", lambda s: s.notna().mean()),
+    )
+
+    # 4. Join the settlement (what the grid operator metered and paid) and
+    #    the plant masterdata, and derive what neither source has alone:
+    #    energy used on site = generated - exported - curtailed.
+    _plant_cols = plants[["plant_id", "name", "country_code", "capacity_mw"]]
+    gold = (
+        daily.merge(
+            grid_settlement.rename(columns={"settlement_date": "date"}),
+            on=["plant_id", "date"],
+            how="inner",
+        )
+        .merge(_plant_cols, on="plant_id")
+    )
+    gold["self_consumption_kwh"] = (
+        gold["energy_generated_kwh"] - gold["energy_exported_kwh"] - gold["curtailment_kwh"]
+    ).clip(lower=0)
+
+    # The other sources only need the plant name joined in.
+    alarms = alarms_raw.merge(_plant_cols, on="plant_id")
+    maintenance = maintenance_raw.merge(_plant_cols, on="plant_id")
+    costs = costs_raw.merge(_plant_cols, on="plant_id")
 
     #: Business regions for the Region filter. With one plant per country a
     #: country filter would just duplicate the Plants one.
-    REGIONS = {"GB": "EMEA", "NL": "EMEA", "DE": "EMEA", "RU": "EMEA", "CA": "Americas", "BR": "Americas", "MM": "APAC"}
-    plant_region = dict(zip(dim_plants["name"], dim_plants["country_code"].map(REGIONS).fillna("Other")))
-    return alarms, billing, costs, maintenance, plant_region
+    REGIONS = {"GB": "EMEA", "NL": "EMEA", "DE": "EMEA", "RU": "EMEA", "CA": "Americas", "US": "Americas", "BR": "Americas", "MM": "APAC"}
+    plant_region = dict(zip(plants["name"], plants["country_code"].map(REGIONS).fillna("Other")))
+    return alarms, costs, gold, maintenance, plant_region, readings
 
 
 @app.cell(hide_code=True)
 def filters(
+    DateRangeTimeline,
     FONT_SM,
     NF_FG,
     NF_MUTED,
     NF_RULE,
     PANEL_GAP,
-    alt,
-    billing,
     dim_plants,
+    gold,
     mo,
     nf,
     pd,
     plant_region,
 ):
-    _min_date, _max_date = billing["billing_date"].min(), billing["billing_date"].max()
+    _min_date, _max_date = gold["date"].min(), gold["date"].max()
 
     # Short labels ("Dorval"), full names as values: every plant name ends
     # in "Solar Farm", which only made the selected chips overflow.
@@ -276,69 +335,40 @@ def filters(
     _regions = sorted(set(plant_region.values()))
     region_filter = mo.ui.multiselect(options=_regions, value=_regions, full_width=True)
 
-    # Period: a timeline "range slider" over the last two years - marimo's
-    # own range slider is numeric-only (no date labels), so this is a thin
-    # Vega-Lite strip instead: daily fleet energy shows where there's data,
-    # and dragging a brush across it picks the period. The brush starts on
-    # the range the data actually covers.
-    _W = 2 * 367 + PANEL_GAP  # spans two card columns
-    _timeline_days = pd.DataFrame(
-        {"date": pd.date_range(_max_date - pd.DateOffset(years=2), _max_date, freq="D")}
+    # Period: a timeline slider across the whole data range - the strip
+    # shows daily fleet energy (so you can see where there's data), and its
+    # two handles set the start and end independently (dragging between
+    # them moves both). A small anywidget (template/timeline.py): marimo's
+    # own range slider is numeric-only, and a Vega-Lite brush can't be
+    # resized from either end. Starts on the full range of the data.
+    _daily_energy = (
+        gold.groupby("date")["energy_generated_kwh"].sum()
+        .reindex(pd.date_range(_min_date, _max_date, freq="D"), fill_value=0)
     )
-    _timeline_days["energy"] = (
-        _timeline_days["date"]
-        .map(billing.groupby("billing_date")["energy_generated_kwh"].sum())
-        .fillna(0)
-    )
-    _dt = lambda d: alt.DateTime(year=d.year, month=d.month, date=d.day)
-    _brush = alt.selection_interval(
-        name="period",
-        encodings=["x"],
-        value={"x": [_dt(_min_date), _dt(_max_date)]},
-        mark=alt.BrushConfig(fill=nf.MINT, fillOpacity=0.18, stroke=nf.MINT, strokeWidth=1),
-    )
-    _timeline = (
-        alt.Chart(_timeline_days)
-        .mark_area(color=nf.MINT, opacity=0.7, interpolate="step-after")
-        .encode(
-            x=alt.X(
-                "date:T",
-                title=None,
-                axis=alt.Axis(
-                    format="%b %Y",
-                    tickCount={"interval": "month", "step": 3},
-                    labelColor=NF_MUTED,
-                    labelFontSize=FONT_SM - 1,
-                    domainColor=NF_RULE,
-                    tickColor=NF_RULE,
-                    grid=False,
-                ),
-            ),
-            y=alt.Y("energy:Q", axis=None),
+    period_filter = mo.ui.anywidget(
+        DateRangeTimeline(
+            start=_min_date.date().isoformat(),
+            end=_max_date.date().isoformat(),
+            min_date=_min_date.date().isoformat(),
+            max_date=_max_date.date().isoformat(),
+            values=[float(v) for v in _daily_energy],
+            width=2 * 367 + PANEL_GAP,  # spans two card columns
+            label="Period",
+            colors={"accent": nf.MINT, "fg": NF_FG, "muted": NF_MUTED, "rule": NF_RULE, "bg": nf.NAVY},
         )
-        .add_params(_brush)
-        .properties(
-            width=_W,
-            height=18,
-            # fit the *width* (month labels included) to the two columns;
-            # the height is the strip itself, with the axis below it
-            autosize=alt.AutoSizeParams(type="fit-x", contains="padding"),
-            padding={"left": 2, "right": 24, "top": 2, "bottom": 0},
-        )
-        .configure_view(strokeWidth=1, stroke=NF_RULE)
     )
-    # no "..." actions menu - it reserves 38px on the right (see explorer_layout)
-    with alt.renderers.enable(alt.renderers.active, embed_options={"actions": False}):
-        period_filter = mo.ui.altair_chart(_timeline, legend_selection=False)
 
     def _slot(label, widget, *, span=1):
         """One filter per stat-card column (or `span` of them): its label
-        above, the control stretched to the column's full width."""
-        return (
-            f'<div style="min-width:0; grid-column:span {span};">'
+        above (unless the widget draws its own), the control stretched to
+        the column's full width."""
+        head = (
             f'<div style="color:{NF_MUTED}; font-size:{FONT_SM}px; margin-bottom:4px;">{label}</div>'
-            f"{mo.as_html(widget).text}</div>"
+            if label
+            else ""
         )
+        return f'<div style="min-width:0; grid-column:span {span};">{head}{mo.as_html(widget).text}</div>'
+
 
     # marimo's date widget colors its *background* via a token that reads
     # the computed `color-scheme` (this notebook's own page is `body.light.
@@ -358,7 +388,7 @@ def filters(
         f"display:grid; grid-template-columns:repeat(4, 1fr); gap:{PANEL_GAP}px; "
         f'padding:{PANEL_GAP}px 0;">'
         f'{_slot("Plants", location_filter)}'
-        f'{_slot("Period - drag across the timeline", period_filter, span=2)}'
+        f'{_slot(None, period_filter, span=2)}'
         f'{_slot("Region", region_filter)}</div>'
     )
     return location_filter, period_filter, region_filter
@@ -367,7 +397,7 @@ def filters(
 @app.cell(hide_code=True)
 def apply_filters(
     alarms,
-    billing,
+    gold,
     costs,
     location_filter,
     maintenance,
@@ -382,26 +412,13 @@ def apply_filters(
     # within it.
     _locations = [n for n in location_filter.value if plant_region[n] in region_filter.value]
 
-    # The timeline brush's range, as `{"period": {"date": [start_ms, end_ms]}}`
-    # - epoch milliseconds of the *browser's local* time, so a local
-    # midnight arrives as e.g. 22:00 UTC the day before. Rounding to the
-    # nearest day (rather than truncating) lands on the intended date for
-    # any browser timezone within ±12h. No brush (never dragged, or
-    # cleared) means the whole data range.
-    _brushed = (period_filter.selections or {}).get("period", {}).get("date")
-    if _brushed and len(_brushed) == 2:
-        period_start, period_end = (
-            (pd.to_datetime(v, unit="ms") if isinstance(v, (int, float)) else pd.to_datetime(v))
-            .tz_localize(None)
-            .round("D")
-            for v in _brushed
-        )
-    else:
-        period_start, period_end = billing["billing_date"].min(), billing["billing_date"].max()
+    # The Period timeline's two handles, as ISO dates.
+    period_start = pd.Timestamp(period_filter.value["start"])
+    period_end = pd.Timestamp(period_filter.value["end"])
     _start, _end = period_start.date(), period_end.date()
 
-    billing_f = billing[
-        billing["name"].isin(_locations) & billing["billing_date"].dt.date.between(_start, _end)
+    gold_f = gold[
+        gold["name"].isin(_locations) & gold["date"].dt.date.between(_start, _end)
     ]
     alarms_f = alarms[
         alarms["name"].isin(_locations) & alarms["triggered_at"].dt.date.between(_start, _end)
@@ -421,7 +438,7 @@ def apply_filters(
     _TAX_RATE = 0.25
     _OPEX = ["O&M contract", "Land lease", "Insurance", "Asset management", "Grid fees"]
     _month = lambda dates: dates.dt.strftime("%Y-%m")
-    _b = billing_f.assign(month=_month(billing_f["billing_date"]))
+    _b = gold_f.assign(month=_month(gold_f["date"]))
     _c = costs_f.assign(month=_month(costs_f["cost_date"]))
     _m = maintenance_f.assign(month=_month(maintenance_f["scheduled_date"]))
 
@@ -429,7 +446,7 @@ def apply_filters(
         out = _b.groupby(keys)[["revenue_eur"]].sum().rename(columns={"revenue_eur": "Revenue"})
         by_cat = _c.pivot_table(index=keys, columns="category", values="amount_eur", aggfunc="sum")
         for cat in _OPEX + ["Depreciation", "Interest"]:
-            out[cat] = by_cat[cat] if cat in by_cat else 0.0
+            out[cat] = by_cat.get(cat, 0.0)
         out["Corrective maintenance"] = _m.groupby(keys)["cost_eur"].sum()
         out = out.fillna(0.0)
         out["Operating costs"] = out[_OPEX + ["Corrective maintenance"]].sum(axis=1)
@@ -440,7 +457,7 @@ def apply_filters(
 
     pnl = _pnl_by(["name"])
     pnl_monthly = _pnl_by(["name", "month"])
-    return alarms_f, billing_f, maintenance_f, period_end, period_start, pnl, pnl_monthly
+    return alarms_f, gold_f, maintenance_f, period_end, period_start, pnl, pnl_monthly
 
 
 @app.cell(hide_code=True)
@@ -476,19 +493,21 @@ def stat_card_helper(
             f'stroke-linejoin="round" stroke-linecap="round"/></svg>'
         )
 
-    def delta_html(change: float | None, *, higher_is_better: bool) -> str:
-        """Week-over-week change: arrow + percentage, colored better/worse
-        (the arrow and number carry the meaning; color only reinforces it)."""
+    def delta_html(change: float | None, *, higher_is_better: bool, days: int = 7) -> str:
+        """Change vs the `days` before the last `days`: arrow + percentage,
+        colored better/worse (the arrow and number carry the meaning; color
+        only reinforces it)."""
+        window = f"vs prior {days} days"
         if change is None:
-            return f'<span style="color:{NF_MUTED};">no prior week to compare</span>'
+            return f'<span style="color:{NF_MUTED};">nothing to compare {window}</span>'
         if abs(change) < 0.0005:
-            return f'<span style="color:{NF_MUTED};">&#9644; 0.0% vs prior 7 days</span>'
+            return f'<span style="color:{NF_MUTED};">&#9644; 0.0% {window}</span>'
         good = (change > 0) == higher_is_better
         arrow = "&#9650;" if change > 0 else "&#9660;"
         return (
             f'<span style="color:{STATUS_GOOD if good else STATUS_BAD}; font-weight:600;">'
             f"{arrow} {abs(change):.1%}</span>"
-            f'<span style="color:{NF_MUTED};"> vs prior 7 days</span>'
+            f'<span style="color:{NF_MUTED};"> {window}</span>'
         )
 
     def stat_card(label: str, value: str, delta: str, trend: str) -> str:
@@ -532,8 +551,9 @@ def stat_card_helper(
 @app.cell(hide_code=True)
 def cards(
     alarms_f,
-    billing_f,
     delta_html,
+    explorer_view,
+    gold_f,
     maintenance_f,
     pd,
     period_end,
@@ -576,61 +596,81 @@ def cards(
 
     _start, _end = period_start, period_end
 
+    # Cross-filter: the plant clicked in the charts below. It lives in the
+    # browser (the charts' shared `plant_sel`), but `mo.ui.altair_chart`
+    # sends every selection change back here, so the cards follow it too -
+    # a round trip through Python, unlike the charts' instant dimming.
+    _picked = [
+        n for n in (explorer_view.selections or {}).get("plant_sel", {}).get("name", []) if n
+    ]
+    _g, _al, _mt = gold_f, alarms_f, maintenance_f
+    if _picked:
+        _g, _al, _mt = (df[df["name"].isin(_picked)] for df in (_g, _al, _mt))
+    _suffix = f" · {', '.join(n.removesuffix(' Solar Farm') for n in _picked)}" if _picked else ""
+
     def _window(lo, hi):
         """The three frames cut to days lo..hi (inclusive)."""
         return (
-            billing_f[billing_f["billing_date"].between(lo, hi)],
-            alarms_f[alarms_f["triggered_at"].dt.tz_localize(None).dt.normalize().between(lo, hi)],
-            maintenance_f[maintenance_f["scheduled_date"].between(lo, hi)],
+            _g[_g["date"].between(lo, hi)],
+            _al[_al["triggered_at"].dt.tz_localize(None).dt.normalize().between(lo, hi)],
+            _mt[_mt["scheduled_date"].between(lo, hi)],
         )
 
-    _last = _window(_end - pd.Timedelta(days=6), _end)
-    _prior = _window(_end - pd.Timedelta(days=13), _end - pd.Timedelta(days=7))
-    _has_prior = _start <= _end - pd.Timedelta(days=13)
-
-    def _change(metric):
-        if not _has_prior:
+    # Deltas compare the last N days with the N before: a week for the
+    # daily production/revenue KPIs, four weeks for the sparse event-based
+    # ones (a week often has no alarms at all, leaving nothing to compare).
+    def _change(metric, days):
+        if _start > _end - pd.Timedelta(days=2 * days - 1):
             return None
-        now, before = metric(*_last), metric(*_prior)
+        now = metric(*_window(_end - pd.Timedelta(days=days - 1), _end))
+        before = metric(*_window(_end - pd.Timedelta(days=2 * days - 1), _end - pd.Timedelta(days=days)))
         if now is None or not before:
             return None
         return now / before - 1
 
-    # Trends: daily for the production/revenue KPIs, weekly for the sparse
-    # event-based ones (a few alarms a day would just be noise).
-    _days = pd.date_range(_start, _end, freq="D")
-    _weeks = pd.date_range(_start, _end, freq="7D")
+    # Trends: ~60 points for the production/revenue KPIs, ~25 for the
+    # sparse event-based ones (a few alarms a day would just be noise) -
+    # daily/weekly over a short period, coarser buckets over two years.
+    _n_days = (_end - _start).days + 1
+
+    def _buckets(points, min_days):
+        size = pd.Timedelta(days=max(min_days, -(-_n_days // points)))
+        return pd.date_range(_start, _end, freq=size), size
+
+    _fine, _coarse = _buckets(60, 1), _buckets(25, 7)
 
     def _trend(metric, starts, length):
         vals = [metric(*_window(d, d + length - pd.Timedelta(days=1))) for d in starts]
         return sparkline([0 if v is None else v for v in vals])
-
-    _day, _week = pd.Timedelta(days=1), pd.Timedelta(days=7)
 
     def _eur(v):
         if v >= 1e6:
             return f"€{v / 1e6:.1f}M"
         return f"€{v / 1e3:.1f}k" if v >= 1e3 else f"€{v:.0f}"
 
-    _b, _a, _m = billing_f, alarms_f, maintenance_f
+    _b, _a, _m = _g, _al, _mt
     _cf, _price_v, _mttr_v = _capacity_factor(_b, _a, _m), _price(_b, _a, _m), _mttr(_b, _a, _m)
     _kpis = [
         # (label, value, metric, higher_is_better, trend buckets)
-        ("Energy produced", f"{_energy(_b, _a, _m) / 1e6:,.1f} GWh", _energy, True, (_days, _day)),
-        ("Capacity factor", "—" if _cf is None else f"{_cf:.1%}", _capacity_factor, True, (_days, _day)),
-        ("Revenue", _eur(_revenue(_b, _a, _m)), _revenue, True, (_days, _day)),
-        ("Avg. price", "—" if _price_v is None else f"€{_price_v:.1f}/MWh", _price, True, (_days, _day)),
-        ("Alarms", f"{_alarms(_b, _a, _m):,}", _alarms, False, (_weeks, _week)),
-        ("Critical alarms", f"{_critical(_b, _a, _m):,}", _critical, False, (_weeks, _week)),
-        ("Mean time to resolve", "—" if _mttr_v is None else f"{_mttr_v:.1f} h", _mttr, False, (_weeks, _week)),
-        ("Maintenance cost", _eur(_maint_cost(_b, _a, _m)), _maint_cost, False, (_weeks, _week)),
+        ("Energy produced", f"{_energy(_b, _a, _m) / 1e6:,.1f} GWh", _energy, True, _fine),
+        ("Capacity factor", "—" if _cf is None else f"{_cf:.1%}", _capacity_factor, True, _fine),
+        ("Revenue", _eur(_revenue(_b, _a, _m)), _revenue, True, _fine),
+        ("Avg. price", "—" if _price_v is None else f"€{_price_v:.1f}/MWh", _price, True, _fine),
+        ("Alarms", f"{_alarms(_b, _a, _m):,}", _alarms, False, _coarse),
+        ("Critical alarms", f"{_critical(_b, _a, _m):,}", _critical, False, _coarse),
+        ("Mean time to resolve", "—" if _mttr_v is None else f"{_mttr_v:.1f} h", _mttr, False, _coarse),
+        ("Maintenance cost", _eur(_maint_cost(_b, _a, _m)), _maint_cost, False, _coarse),
     ]
     stat_row(
         [
             stat_card(
-                label,
+                label + _suffix,
                 value,
-                delta_html(_change(metric), higher_is_better=better),
+                delta_html(
+                    _change(metric, 7 if buckets is _fine else 28),
+                    higher_is_better=better,
+                    days=7 if buckets is _fine else 28,
+                ),
                 _trend(metric, *buckets),
             )
             for label, value, metric, better, buckets in _kpis
@@ -644,8 +684,18 @@ def plant_selection(alt):
     # The shared cross-filter: a click-to-highlight selection keyed on plant
     # name, added to every chart below via `.add_params(plant_sel)`. This
     # mirrors `country_sel` in co2_gdp_dashboard.py's linked explorer.
+    #
+    # Only a click on something that *is* a plant selects: marks without a
+    # plant name (panel backgrounds, table headers, the P&L flows) would
+    # otherwise select "no plant" and dim everything - clicking those
+    # clears the selection instead, as does a double-click anywhere.
+    _has_plant = "event.item && event.item.datum && event.item.datum.name"
     plant_sel = alt.selection_point(
-        fields=["name"], on="click", clear="dblclick", empty="all", name="plant_sel"
+        fields=["name"],
+        on=f"click[{_has_plant}]",
+        clear=f"dblclick, click[!({_has_plant})]",
+        empty="all",
+        name="plant_sel",
     )
     return (plant_sel,)
 
@@ -653,17 +703,20 @@ def plant_selection(alt):
 @app.cell(hide_code=True)
 def table_chart(
     FONT_SM,
+    nf,
     NF_FG,
     NF_MUTED,
     NF_PANEL,
     NF_RULE,
     alarms_f,
     alt,
-    billing_f,
+    gold_f,
     dim_plants,
     maintenance_f,
     panel,
     pd,
+    period_end,
+    period_start,
     plant_scale,
     plant_sel,
     plot_size,
@@ -673,9 +726,9 @@ def table_chart(
     # compiled spec as the other three charts - clicking a row selects that
     # plant everywhere, exactly like clicking it on any chart.
     _w, _h = plot_size()
-    _plants = dim_plants[dim_plants["name"].isin(billing_f["name"].unique())]
-    _energy = billing_f.groupby("name")["energy_generated_kwh"].sum()
-    _possible = (billing_f["capacity_mw"] * 1000 * 24).groupby(billing_f["name"]).sum()
+    _plants = dim_plants[dim_plants["name"].isin(gold_f["name"].unique())]
+    _energy = gold_f.groupby("name")["energy_generated_kwh"].sum()
+    _possible = (gold_f["capacity_mw"] * 1000 * 24).groupby(gold_f["name"]).sum()
     _stats = pd.DataFrame(
         {
             "name": _plants["name"].values,
@@ -685,10 +738,17 @@ def table_chart(
     ).set_index("name")
     _stats["energy"] = _energy
     _stats["cf"] = _energy / _possible
-    _stats["revenue"] = billing_f.groupby("name")["revenue_eur"].sum()
+    _stats["revenue"] = gold_f.groupby("name")["revenue_eur"].sum()
     _stats["alarms"] = alarms_f.groupby("name").size()
     _stats["maint"] = maintenance_f.groupby("name")["cost_eur"].sum()
     _stats = _stats.fillna(0).sort_values("energy", ascending=False).reset_index()
+    # Lifecycle, next to the name: opened during the period, or closed.
+    _life = dim_plants.set_index("name")
+    _opened = _life["commissioning_date"].between(period_start, period_end)
+    _closed = _life["decommissioning_date"].notna() & (_life["decommissioning_date"] <= period_end)
+    _stats["status"] = _stats["name"].map(
+        lambda n: "closed" if _closed.get(n, False) else ("new" if _opened.get(n, False) else "")
+    )
 
     def _eur(v):
         return f"€{v / 1e6:.2f}M" if v >= 1e6 else f"€{v / 1e3:.1f}k"
@@ -773,6 +833,16 @@ def table_chart(
         .encode(x=alt.value(_PAD + 18), y=alt.Y("y:Q", **_px), text="label:N", opacity=_dim)
         .add_params(plant_sel)
     )
+    def _status(kind, color):
+        # fixed mark colors, not a color encoding: in this layer a second
+        # color scale would merge with the dots' plant-color scale
+        return (
+            alt.Chart(_rows[_rows["status"] == kind])
+            .mark_text(align="right", baseline="middle", fontSize=FONT_SM - 2, fontWeight=600, color=color)
+            .encode(x=alt.value(_name_w - 2), y=alt.Y("y:Q", **_px), text="status:N", opacity=_dim)
+            .add_params(plant_sel)
+        )
+
     _values = (
         alt.Chart(_cells)
         .mark_text(align="right", baseline="middle", color=NF_FG, fontSize=FONT_SM)
@@ -790,6 +860,8 @@ def table_chart(
         _header,
         _dots,
         _names,
+        _status("new", nf.MINT),
+        _status("closed", NF_MUTED),
         _values,
     ).properties(width=_w, height=_h, title="Plant overview")
     table_panel = panel(table_chart)
@@ -797,9 +869,9 @@ def table_chart(
 
 
 @app.cell(hide_code=True)
-def line_chart(alt, billing_f, dim_plants, panel, plant_scale, plant_sel, plot_size):
+def line_chart(alt, gold_f, dim_plants, panel, plant_scale, plant_sel, plot_size):
     _daily = (
-        billing_f.groupby(["name", "billing_date"], as_index=False)["energy_generated_kwh"]
+        gold_f.groupby(["name", "date"], as_index=False)["energy_generated_kwh"]
         .sum()
     )
     # y-axis: fixed-width tick labels ("2.2M" via `~s`) plus its title;
@@ -810,6 +882,14 @@ def line_chart(alt, billing_f, dim_plants, panel, plant_scale, plant_sel, plot_s
     # panel card too, so they need lifting above it.
     _ON_TOP = 1
     _w, _h = plot_size(**_chrome)
+    # Ticks to suit the period: weekly over a couple of months, quarterly
+    # over two years.
+    _span_days = (_daily["date"].max() - _daily["date"].min()).days if len(_daily) else 0
+    _x_axis = (
+        alt.Axis(format="%b %Y", tickCount={"interval": "month", "step": 3}, zindex=_ON_TOP)
+        if _span_days > 150
+        else alt.Axis(format="%b %d", tickCount="week", zindex=_ON_TOP)
+    )
 
     line_chart = (
         alt.Chart(_daily)
@@ -820,16 +900,15 @@ def line_chart(alt, billing_f, dim_plants, panel, plant_scale, plant_sel, plot_s
         # place, one on top of the other in scale-domain order.
         .mark_area(line={"strokeWidth": 1.5}, interpolate="monotone")
         .encode(
-            x=alt.X(
-                "billing_date:T",
-                title=None,
-                # one tick a week - left to itself Vega crams in near-daily ticks
-                axis=alt.Axis(format="%b %d", tickCount="week", zindex=_ON_TOP),
-            ),
+            x=alt.X("date:T", title=None, axis=_x_axis),
             y=alt.Y(
                 "energy_generated_kwh:Q",
                 title="Energy generated (kWh)",
                 stack="zero",
+                # Plants open and close during the period: a day with no row
+                # for a plant is 0 kWh, or its stacked band would bridge the
+                # gap from its last day to its next one.
+                impute=alt.ImputeParams(value=0),
                 axis=alt.Axis(
                     format="~s", minExtent=_Y_AXIS, maxExtent=_Y_AXIS, zindex=_ON_TOP
                 ),
@@ -841,7 +920,7 @@ def line_chart(alt, billing_f, dim_plants, panel, plant_scale, plant_sel, plot_s
             opacity=alt.condition(plant_sel, alt.value(0.85), alt.value(0.15)),
             tooltip=[
                 alt.Tooltip("name:N", title="Plant"),
-                alt.Tooltip("billing_date:T", title="Date"),
+                alt.Tooltip("date:T", title="Date"),
                 alt.Tooltip("energy_generated_kwh:Q", title="kWh", format=",.0f"),
             ],
         )
@@ -854,6 +933,9 @@ def line_chart(alt, billing_f, dim_plants, panel, plant_scale, plant_sel, plot_s
 
 @app.cell(hide_code=True)
 def sankey_helper(FONT_SM, NF_FG, alt, pd):
+    #: scope name for the unfiltered sankey (see `sankey_chart`)
+    ALL = "__all__"
+
     def sankey_chart(
         nodes_df: pd.DataFrame,
         links_df: pd.DataFrame,
@@ -884,90 +966,119 @@ def sankey_helper(FONT_SM, NF_FG, alt, pd):
         nodes, all others right; `left_margin`/`right_margin` reserve room
         for them *inside* `width`; `col_positions` (0..1 per column, default
         evenly spaced) leaves room where a middle column's labels need it.
-        Nodes/links that carry a `name` take part in `selection` (dimming
-        when another plant is selected).
+        Nodes/links that carry a `name` take part in `selection`.
+
+        Optional `scope` column on both frames: several complete sankeys in
+        one chart, of which it shows the one whose scope is the selected
+        plant's name (`ALL` when nothing is selected) - cross-filtering a
+        layout that has to be computed in Python, entirely in the browser.
         """
         n_cols = int(nodes_df["column"].max()) + 1
         span = width - left_margin - right_margin - node_width
         if col_positions is None:
             col_positions = [c / (n_cols - 1) if n_cols > 1 else 0 for c in range(n_cols)]
         col_x = {c: left_margin + span * f for c, f in enumerate(col_positions)}
-        parents = links_df.groupby("target")["source"].agg(lambda s: sorted(set(s)))
+        def _layout(nodes_df, links_df, scope):
+            """Lay out one scope's nodes and ribbons (pixel positions)."""
+            parents = links_df.groupby("target")["source"].agg(lambda s: sorted(set(s)))
 
-        def layout_for(k):
-            """Stack every column at `k` px per unit; returns (layout, fits)."""
-            layout, fits = {}, True
-            for col in range(n_cols):
-                grp = nodes_df[nodes_df["column"] == col].sort_values("order")
-                srcs = {src for nid in grp["id"] for src in parents.get(nid, [])}
-                y = layout[next(iter(srcs))]["y0"] if len(srcs) == 1 and next(iter(srcs)) in layout else 0.0
-                for _, row in grp.iterrows():
-                    h = row["value"] * k
-                    layout[row["id"]] = {**row.to_dict(), "y0": y, "y1": y + h}
-                    y += max(h, min_slot) + gap
-                fits &= y - gap <= height
-            return layout, fits
+            def layout_for(k):
+                """Stack every column at `k` px per unit; returns (layout, fits)."""
+                layout, fits = {}, True
+                for col in range(n_cols):
+                    grp = nodes_df[nodes_df["column"] == col].sort_values("order")
+                    srcs = {src for nid in grp["id"] for src in parents.get(nid, [])}
+                    y = layout[next(iter(srcs))]["y0"] if len(srcs) == 1 and next(iter(srcs)) in layout else 0.0
+                    for _, row in grp.iterrows():
+                        h = row["value"] * k
+                        layout[row["id"]] = {**row.to_dict(), "y0": y, "y1": y + h}
+                        y += max(h, min_slot) + gap
+                    fits &= y - gap <= height
+                return layout, fits
 
-        k = height / nodes_df.groupby("column")["value"].sum().max()
-        layout, fits = layout_for(k)
-        while not fits and k > 0:
-            k *= 0.97
+            k = height / nodes_df.groupby("column")["value"].sum().max()
             layout, fits = layout_for(k)
+            while not fits and k > 0:
+                k *= 0.97
+                layout, fits = layout_for(k)
 
-        out_cursor = {nid: n["y0"] for nid, n in layout.items()}
-        in_cursor = dict(out_cursor)
+            out_cursor = {nid: n["y0"] for nid, n in layout.items()}
+            in_cursor = dict(out_cursor)
 
-        def ease(t: float) -> float:
-            return t * t * (3 - 2 * t)
+            def ease(t: float) -> float:
+                return t * t * (3 - 2 * t)
 
-        ribbon_rows = []
-        _links = links_df.assign(
-            _s=links_df["source"].map(lambda n: layout[n]["order"]),
-            _t=links_df["target"].map(lambda n: layout[n]["order"]),
-        ).sort_values(["_s", "_t"])
-        for i, (_, row) in enumerate(_links.iterrows()):
-            s, t, h = row["source"], row["target"], row["value"] * k
-            sy0, ty0 = out_cursor[s], in_cursor[t]
-            out_cursor[s] += h
-            in_cursor[t] += h
-            xl = col_x[layout[s]["column"]] + node_width
-            xr = col_x[layout[t]["column"]]
-            for step in range(ribbon_steps + 1):
-                frac = step / ribbon_steps
-                e = ease(frac)
-                ribbon_rows.append({
-                    "link_id": i,
-                    "x": xl + frac * (xr - xl),
-                    "y_top": sy0 + e * (ty0 - sy0),
-                    "y_bot": sy0 + h + e * (ty0 - sy0),
-                    "color_key": row["color_key"],
-                    "name": row.get("name"),
-                })
-        ribbon_df = pd.DataFrame(ribbon_rows)
+            ribbon_rows = []
+            _links = links_df.assign(
+                _s=links_df["source"].map(lambda n: layout[n]["order"]),
+                _t=links_df["target"].map(lambda n: layout[n]["order"]),
+            ).sort_values(["_s", "_t"])
+            for i, (_, row) in enumerate(_links.iterrows()):
+                s, t, h = row["source"], row["target"], row["value"] * k
+                sy0, ty0 = out_cursor[s], in_cursor[t]
+                out_cursor[s] += h
+                in_cursor[t] += h
+                xl = col_x[layout[s]["column"]] + node_width
+                xr = col_x[layout[t]["column"]]
+                for step in range(ribbon_steps + 1):
+                    frac = step / ribbon_steps
+                    e = ease(frac)
+                    ribbon_rows.append({
+                        "link_id": f"{scope}:{i}",
+                        "x": xl + frac * (xr - xl),
+                        "y_top": sy0 + e * (ty0 - sy0),
+                        "y_bot": sy0 + h + e * (ty0 - sy0),
+                        "color_key": row["color_key"],
+                        "name": row.get("name"),
+                        "scope": scope,
+                    })
+            ribbon_df = pd.DataFrame(ribbon_rows)
 
-        node_df = pd.DataFrame(
-            [
-                {
-                    "id": nid, "label": n["label"], "column": n["column"],
-                    "x0": col_x[n["column"]], "x1": col_x[n["column"]] + node_width,
-                    "y0": n["y0"], "y1": max(n["y1"], n["y0"] + 1),
-                    "mid": n["y0"] + max(n["y1"] - n["y0"], 1) / 2,
-                    "color_key": n["color_key"], "name": n.get("name"),
-                    "text": n.get("text", n["label"]),
-                }
-                for nid, n in layout.items()
-            ]
-        )
+            node_df = pd.DataFrame(
+                [
+                    {
+                        "id": nid, "label": n["label"], "column": n["column"],
+                        "x0": col_x[n["column"]], "x1": col_x[n["column"]] + node_width,
+                        "y0": n["y0"], "y1": max(n["y1"], n["y0"] + 1),
+                        "mid": n["y0"] + max(n["y1"] - n["y0"], 1) / 2,
+                        "color_key": n["color_key"], "name": n.get("name"),
+                        "text": n.get("text", n["label"]),
+                        "scope": scope,
+                    }
+                    for nid, n in layout.items()
+                ]
+            )
+
+            return ribbon_df, node_df
+
+        # One layout per scope (see the docstring): each is stacked and
+        # scaled on its own, so a single plant's P&L fills the chart too.
+        if "scope" not in nodes_df:
+            nodes_df, links_df = nodes_df.assign(scope=ALL), links_df.assign(scope=ALL)
+        _parts = [
+            _layout(nodes_df[nodes_df["scope"] == sc], links_df[links_df["scope"] == sc], sc)
+            for sc in nodes_df["scope"].unique()
+        ]
+        ribbon_df = pd.concat([r for r, _ in _parts], ignore_index=True)
+        node_df = pd.concat([n for _, n in _parts], ignore_index=True)
 
         _px = {"scale": None}  # raw pixel positions
         _color = alt.Color("color_key:N", scale=color_scale, legend=None)
 
-        def _dimmed(on, off):
-            return alt.condition(selection, alt.value(on), alt.value(off)) if selection is not None else alt.value(on)
+        # Show the scope matching the selected plant, or ALL with none.
+        if selection is not None:
+            _sel = selection.name
+            _in_scope = (
+                f"datum.scope == (isValid({_sel}) && isValid({_sel}.name) && isValid({_sel}.name[0])"
+                f" ? {_sel}.name[0] : '{ALL}')"
+            )
+        else:
+            _in_scope = f"datum.scope == '{ALL}'"
 
         def ribbons(df, opacity):
             chart = (
                 alt.Chart(df)
+                .transform_filter(_in_scope)
                 .mark_area(interpolate="linear")
                 .encode(
                     x=alt.X("x:Q", **_px),
@@ -983,6 +1094,7 @@ def sankey_helper(FONT_SM, NF_FG, alt, pd):
         def nodes(df, opacity):
             return (
                 alt.Chart(df)
+                .transform_filter(_in_scope)
                 .mark_rect()
                 .encode(
                     x=alt.X("x0:Q", **_px), x2="x1:Q",
@@ -993,26 +1105,27 @@ def sankey_helper(FONT_SM, NF_FG, alt, pd):
                 )
             )
 
-        # Only rows that carry a plant `name` take part in the selection:
-        # plant nodes and their ribbons dim when another plant is picked,
-        # the P&L breakdown downstream stays as it is.
+        # Rows that carry a plant `name` (the plants' own nodes and ribbons)
+        # are what a click selects - which then swaps in that plant's scope.
         _named = ribbon_df["name"].notna()
         layers = [
             ribbons(ribbon_df[~_named], alt.value(0.45)),
-            ribbons(ribbon_df[_named], _dimmed(0.55, 0.12)),
+            ribbons(ribbon_df[_named], alt.value(0.55)),
             nodes(node_df[node_df["name"].isna()], alt.value(1.0)),
-            nodes(node_df[node_df["name"].notna()], _dimmed(1.0, 0.3)),
+            nodes(node_df[node_df["name"].notna()], alt.value(1.0)),
         ]
         if selection is not None:
             layers[1] = layers[1].add_params(selection)
             layers[3] = layers[3].add_params(selection)
 
-        _label = dict(baseline="middle", color=NF_FG, fontSize=FONT_SM - 1, lineBreak="\n")
+        _label = {"baseline": "middle", "color": NF_FG, "fontSize": FONT_SM - 1, "lineBreak": "\n"}
         layers += [
             alt.Chart(node_df[node_df["column"] == 0])
+            .transform_filter(_in_scope)
             .mark_text(align="right", dx=-5, **_label)
             .encode(x=alt.X("x0:Q", **_px), y=alt.Y("mid:Q", **_px), text="text:N"),
             alt.Chart(node_df[node_df["column"] > 0])
+            .transform_filter(_in_scope)
             .mark_text(align="left", dx=5, **_label)
             .encode(x=alt.X("x1:Q", **_px), y=alt.Y("mid:Q", **_px), text="text:N"),
         ]
@@ -1022,11 +1135,12 @@ def sankey_helper(FONT_SM, NF_FG, alt, pd):
         # properties on the single top-level spec of a composed chart.
         return alt.layer(*layers).properties(width=width, height=height)
 
-    return (sankey_chart,)
+    return ALL, sankey_chart
 
 
 @app.cell(hide_code=True)
 def sankey_build(
+    ALL,
     NF_MUTED,
     alt,
     dim_plants,
@@ -1042,36 +1156,43 @@ def sankey_build(
     # The fleet's P&L as a flow: each plant's revenue -> total revenue ->
     # where it goes (operating costs, depreciation, interest, tax, net
     # profit), with operating costs broken down once more on the right.
-    _tot = pnl.drop(columns="name").sum()
-    _revenue = _tot["Revenue"]
+    # Built once for the whole fleet and once per plant: clicking a plant
+    # anywhere swaps in that plant's own P&L (see `sankey_chart`'s scopes).
+    _SPLIT = ["Operating costs", "Depreciation", "Interest", "Tax", "Net profit"]
+    _OPEX = ["O&M contract", "Grid fees", "Land lease", "Insurance", "Asset management", "Corrective maintenance"]
 
     def _eur(v):
         return f"€{v / 1e6:.1f}M" if abs(v) >= 1e6 else f"€{v / 1e3:.0f}k"
 
-    def _pct(v):
-        return f" ({v / _revenue:.0%})" if _revenue else ""
+    def _flow(rows, scope):
+        tot = rows.drop(columns="name").sum()
+        revenue = tot["Revenue"]
+        pct = lambda v: f" ({v / revenue:.0%})" if revenue else ""
+        nodes, links = [], []
+        for i, r in enumerate(rows[rows["Revenue"] > 0].sort_values("Revenue", ascending=False).itertuples()):
+            short = r.name.removesuffix(" Solar Farm")
+            nodes.append({"id": r.name, "label": short, "text": short, "column": 0, "value": r.Revenue,
+                          "order": i, "color_key": r.name, "name": r.name})
+            links.append({"source": r.name, "target": "Revenue", "value": r.Revenue, "color_key": r.name, "name": r.name})
+        nodes.append({"id": "Revenue", "label": "Revenue", "text": f"Revenue\n{_eur(revenue)}", "column": 1,
+                      "value": revenue, "order": 0, "color_key": "Revenue"})
+        for i, cat in enumerate(_SPLIT):
+            key = "Profit" if cat == "Net profit" else "Cost"
+            nodes.append({"id": cat, "label": cat, "text": f"{cat} {_eur(tot[cat])}{pct(tot[cat])}",
+                          "column": 2, "value": max(tot[cat], 0), "order": i, "color_key": key})
+            links.append({"source": "Revenue", "target": cat, "value": max(tot[cat], 0), "color_key": key})
+        for i, cat in enumerate(_OPEX):
+            label = "Corrective maint." if cat == "Corrective maintenance" else cat
+            nodes.append({"id": cat, "label": label, "text": f"{label} {_eur(tot[cat])}", "column": 3,
+                          "value": tot[cat], "order": i, "color_key": "Cost"})
+            links.append({"source": "Operating costs", "target": cat, "value": tot[cat], "color_key": "Cost"})
+        return (pd.DataFrame(nodes).assign(scope=scope), pd.DataFrame(links).assign(scope=scope))
 
-    _SPLIT = ["Operating costs", "Depreciation", "Interest", "Tax", "Net profit"]
-    _OPEX = ["O&M contract", "Grid fees", "Land lease", "Insurance", "Asset management", "Corrective maintenance"]
-    _nodes, _links = [], []
-    _plants = pnl[pnl["Revenue"] > 0].sort_values("Revenue", ascending=False)
-    for i, r in enumerate(_plants.itertuples()):
-        short = r.name.removesuffix(" Solar Farm")
-        _nodes.append({"id": r.name, "label": short, "text": short, "column": 0, "value": r.Revenue,
-                       "order": i, "color_key": r.name, "name": r.name})
-        _links.append({"source": r.name, "target": "Revenue", "value": r.Revenue, "color_key": r.name, "name": r.name})
-    _nodes.append({"id": "Revenue", "label": "Revenue", "text": f"Revenue\n{_eur(_revenue)}", "column": 1,
-                   "value": _revenue, "order": 0, "color_key": "Revenue"})
-    for i, cat in enumerate(_SPLIT):
-        key = "Profit" if cat == "Net profit" else "Cost"
-        _nodes.append({"id": cat, "label": cat, "text": f"{cat} {_eur(_tot[cat])}{_pct(_tot[cat])}",
-                       "column": 2, "value": max(_tot[cat], 0), "order": i, "color_key": key})
-        _links.append({"source": "Revenue", "target": cat, "value": max(_tot[cat], 0), "color_key": key})
-    for i, cat in enumerate(_OPEX):
-        label = "Corrective maint." if cat == "Corrective maintenance" else cat
-        _nodes.append({"id": cat, "label": label, "text": f"{label} {_eur(_tot[cat])}", "column": 3,
-                       "value": _tot[cat], "order": i, "color_key": "Cost"})
-        _links.append({"source": "Operating costs", "target": cat, "value": _tot[cat], "color_key": "Cost"})
+    _scopes = [_flow(pnl, ALL)] + [
+        _flow(pnl[pnl["name"] == n], n) for n in pnl.loc[pnl["Revenue"] > 0, "name"]
+    ]
+    _nodes = pd.concat([n for n, _ in _scopes], ignore_index=True)
+    _links = pd.concat([l for _, l in _scopes], ignore_index=True)
 
     # Plants keep their own colors; money out is neutral gray, profit mint.
     _plant_colors = plant_scale(dim_plants["name"])
@@ -1080,8 +1201,8 @@ def sankey_build(
 
     _w, _h = plot_size()
     sankey_chart_out = sankey_chart(
-        pd.DataFrame(_nodes),
-        pd.DataFrame(_links),
+        _nodes,
+        _links,
         width=_w,
         height=_h,
         color_scale=alt.Scale(domain=_keys, range=_range),
@@ -1170,7 +1291,7 @@ def pnl_chart(
     NF_MUTED,
     PANEL_TITLE_H,
     alt,
-    billing_f,
+    gold_f,
     nf,
     panel,
     pd,
@@ -1197,16 +1318,30 @@ def pnl_chart(
         }
     ).melt(id_vars=["name", "month"], var_name="measure", value_name="amount")
 
-    # Month labels say when a month is only partly covered by the period
-    # ("Jul 23–31"), so a short bar reads as fewer days, not a bad month.
-    _days = billing_f.groupby(billing_f["billing_date"].dt.strftime("%Y-%m"))["billing_date"].agg(["min", "max"])
+    # Month labels. Over a few months, a partly-covered month says so
+    # ("Jul 23–31") so a short bar reads as fewer days, not a bad month;
+    # over two years that's too much text, so axis labels become "Jan 25"
+    # (shown once a quarter) and the coverage moves into the tooltip.
+    _days = gold_f.groupby(gold_f["date"].dt.strftime("%Y-%m"))["date"].agg(["min", "max"])
+    _months = sorted(_long["month"].unique())
+    _few = len(_months) <= 6
+
+    def _coverage(m):
+        lo, hi = _days.loc[m, "min"], _days.loc[m, "max"]
+        if lo.day == 1 and hi.day == hi.days_in_month:
+            return lo.strftime("%B %Y")
+        return f"{lo.strftime('%b')} {lo.day}–{hi.day} {lo.year}"
+
     def _month_label(m):
         lo, hi = _days.loc[m, "min"], _days.loc[m, "max"]
+        if not _few:
+            return lo.strftime("%b %y")
         if lo.day == 1 and hi.day == hi.days_in_month:
             return lo.strftime("%b")  # the Period timeline shows the year
         return f"{lo.strftime('%b')} {lo.day}–{hi.day}"
-    _months = sorted(_long["month"].unique())
+
     _long["month_label"] = _long["month"].map({m: _month_label(m) for m in _months})
+    _long["coverage"] = _long["month"].map({m: _coverage(m) for m in _months})
     _month_order = [_month_label(m) for m in _months]
 
     _Y_AXIS = 44
@@ -1218,7 +1353,7 @@ def pnl_chart(
     _totals = (
         alt.Chart(_long)
         .transform_filter(plant_sel)
-        .transform_aggregate(amount="sum(amount)", groupby=["month_label", "measure"])
+        .transform_aggregate(amount="sum(amount)", groupby=["month_label", "coverage", "measure"])
         .transform_calculate(label=_euro.format("amount"))
     )
     _x = alt.X(
@@ -1226,7 +1361,18 @@ def pnl_chart(
         sort=_month_order,
         title=None,
         scale=alt.Scale(paddingInner=0.3, paddingOuter=0.15),
-        axis=alt.Axis(labelAngle=0, labelColor=NF_FG, labelFontSize=FONT_SM, zindex=_ON_TOP),
+        axis=alt.Axis(
+            labelAngle=0,
+            labelColor=NF_FG,
+            labelFontSize=FONT_SM,
+            zindex=_ON_TOP,
+            ticks=_few,
+            labelExpr=(
+                "datum.label"
+                if _few
+                else "indexof(['Jan', 'Apr', 'Jul', 'Oct'], substring(datum.label, 0, 3)) >= 0 ? datum.label : ''"
+            ),
+        ),
     )
     _x_offset = alt.XOffset("measure:N", sort=list(_MEASURES), scale=alt.Scale(paddingInner=0.12))
     # The axis stays fixed at the fleet's best month (+ headroom for the
@@ -1256,7 +1402,7 @@ def pnl_chart(
             legend=alt.Legend(orient="bottom", direction="horizontal", offset=12),
         ),
         tooltip=[
-            alt.Tooltip("month_label:N", title="Month"),
+            alt.Tooltip("coverage:N", title="Month"),
             alt.Tooltip("measure:N", title="Measure"),
             alt.Tooltip("amount:Q", title="EUR", format=",.0f"),
         ],
@@ -1276,7 +1422,8 @@ def pnl_chart(
         .encode(x=alt.value(_w), y=alt.value(-(PANEL_TITLE_H + 2)), text="label:N")
     )
 
-    pnl_chart = alt.layer(_bars, _values, _scope).properties(
+    # per-bar values only while there are few enough bars to label
+    pnl_chart = alt.layer(*([_bars, _values] if _few else [_bars]), _scope).properties(
         width=_w, height=_h, title="Revenue, cost & profit by month"
     )
     pnl_panel = panel(pnl_chart, **_chrome)
@@ -1349,7 +1496,7 @@ def explorer_layout(
     with alt.renderers.enable(alt.renderers.active, embed_options={"actions": False}):
         explorer_view = mo.ui.altair_chart(explorer)
     explorer_view
-    return
+    return (explorer_view,)
 
 
 if __name__ == "__main__":
