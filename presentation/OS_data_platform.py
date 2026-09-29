@@ -103,9 +103,9 @@ def _(assets, nf):
         photo=assets.img("images/profilepic.jpg"),
         bio=[
             "Worked in the supply chain, healthcare, and energy sectors",
-            "Currently developing a nature conservation planning app",
+            "Currently developing a nature conservation planning agentic app",
             "MSc in Engineering and Management at Politecnico di Torino",
-            "Volunteer of the Python Torino user group",
+            "Organizer for the Python Torino user group",
             "Talk to me about recording music, chess, and open-source",
         ],
         page=2,
@@ -116,32 +116,286 @@ def _(assets, nf):
 @app.cell
 def _(nf):
     nf.slide(
-        title="Is it possible to create great dashboards from raw data using open source technologies?", align='center'
+        nf.bullets(
+            [
+                "Is it possible to go from raw data to dashboards with open source tools",
+                "How would you even do it?",
+                "Is it a good idea?",
+                "Why would it be better than using a managed data platform?",
+            ]
+        ),
+        title="In this presentation",
+        page=4,
     )
-    return
-
-
-@app.cell
-def _():
     return
 
 
 @app.cell
 def _(nf):
     nf.slide(
-        nf.lead(
-            "Is it possible to build a data platform using open-source tools?"
+        title="Is it possible to create great dashboards from raw data using open source technologies?", align='center', page=3
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    from solar_dashboard import app as solar_app
+
+    return (solar_app,)
+
+
+@app.cell(hide_code=True)
+async def _(solar_app):
+    # `embed()` can't be called in the cell that imports the app - marimo
+    # runs the embedded notebook in its own nested kernel, so every `mo.ui`
+    # element (the filters, the click cross-filter) stays fully interactive
+    # here, not just a static screenshot. `dashboard.defs` exposes every
+    # top-level name the notebook defines (dataframes, charts, UI elements),
+    # which the next few slides reuse directly instead of recomputing.
+    dashboard = await solar_app.embed()
+    return (dashboard,)
+
+
+@app.cell(hide_code=True)
+def _(mo, theme):
+    def full_bleed_slide(content, *, natural_width=1650):
+        """A slide with none of `nf.slide()`'s margins, for content - like an
+        embedded notebook - that already brings its own layout and sizing.
+
+        `nf.slide()`'s own content sizes itself with `cqw` units, which
+        resolve against the slide's *actual* rendered width - whatever that
+        turns out to be (there's no single "960px" to target: reveal scales
+        the deck to the window, and the slide box itself sits inside some
+        margin on top of that, so its real width is a moving target - a
+        fixed guess like ``theme.DECK_W`` is what left this covering only
+        part of the slide before).
+
+        The embedded dashboard is a real, fixed-pixel-width page though, so
+        it can't be reflowed with plain CSS - `container-type: inline-size`
+        makes `cqw` resolve against *this wrapper's own* rendered width, and
+        `calc(100cqw / {natural_width}px)` divides that by the dashboard's
+        pixel width to get the scale factor, live, in pure CSS (modern
+        browsers support dividing a length by a length in `calc()` down to
+        a plain number). `zoom`, not `transform`, because `zoom` actually
+        reflows layout at the zoomed size, so this wrapper's height ends up
+        matching automatically - no separate height has to be guessed or
+        measured. If the result is still taller than one slide, it scrolls,
+        like any other dense slide in this deck (see `nf.slide()`'s
+        `pad_top` note).
+        """
+        _inner = (
+            f'<div style="width:{natural_width}px; '
+            f"zoom:calc(100cqw / {natural_width}px);\">"
+            f"{mo.as_html(content).text}</div>"
+        )
+        # No `min-height` here (unlike `nf.slide()`'s own frame): with one,
+        # this box couldn't shrink below one full slide even once the
+        # zoomed content was already shorter than that - which is exactly
+        # what was leaving empty space at the bottom, whatever the zoom
+        # factor. Height should come from the content alone.
+        return mo.Html(
+            f'<div data-nf-slide data-nf-tone="navy" style="box-sizing:border-box; '
+            f'container-type:inline-size; width:100%; background:{theme.NAVY};">'
+            f"{_inner}</div>"
+        )
+
+    return (full_bleed_slide,)
+
+
+@app.cell
+def _(dashboard, full_bleed_slide):
+    # Scale by the dashboard's own chart width, not the helper's default:
+    # the embedded notebook renders without its grid layout, so
+    # nf-dashboard.css's zoom rules (keyed on `.react-grid-item`) don't
+    # apply here and the Vega chart sits at its fixed `DASHBOARD_WIDTH` -
+    # a wider wrapper leaves that difference as an empty strip on the right.
+    full_bleed_slide(dashboard.output, natural_width=dashboard.defs["DASHBOARD_WIDTH"])
+    return
+
+
+@app.cell
+def _(dashboard, mo, nf):
+    _code = '''
+    DATA_DIR = Path("data/solar")
+
+    dim_plants = pd.read_csv(DATA_DIR / "dim_plants.csv")
+    fact_billing = pd.read_csv(DATA_DIR / "fact_energy_billing.csv")
+    fact_maintenance = pd.read_csv(DATA_DIR / "fact_maintenance_events.csv")
+    '''
+    nf.slide(
+        nf.code(_code),
+        # A tab per dataframe rather than all three side by side - three
+        # wide tables at once didn't fit the slide; one at a time does.
+        mo.ui.tabs(
+            {
+                "dim_plants": nf.dataframe(dashboard.defs["dim_plants"], max_rows=5),
+                "fact_billing": nf.dataframe(dashboard.defs["fact_billing"], max_rows=5),
+                "fact_maintenance": nf.dataframe(dashboard.defs["fact_maintenance"], max_rows=5),
+            }
         ),
+        title="Ingesting the raw data",
+        kicker="From CSV to dataframe",
+        # This slide is denser than most (code + tabs + a table): the
+        # template's usual top margin and inter-block rhythm, sized for a
+        # sparse title+bullets slide, left this one taller than the frame -
+        # buy the room back here instead of shrinking the table further.
+        pad_top="5cqw",
+        gap="1.2cqw",
+    )
+    return
+
+
+@app.cell
+def _(dashboard, nf):
+    _code = '''
+    # join plant names into every fact table once, so charts and filters
+    # can work with "location" (plant name) directly
+    billing = fact_billing.merge(
+        dim_plants[["plant_id", "name", "country_code"]], on="plant_id"
+    )
+    '''
+    nf.slide(
+        nf.code(_code),
+        nf.dataframe(dashboard.defs["billing"], max_rows=5),
+        title="Preparing it for visualization",
+        kicker="One join, not a repeated lookup",
+    )
+    return
+
+
+@app.cell
+def _(dashboard, nf):
+    _code = '''
+    # one row per (plant, day): that day's total energy, summed across
+    # whichever sensors belong to the plant
+    daily = billing.groupby(["name", "billing_date"], as_index=False)[
+        "energy_generated_kwh"
+    ].sum()
+
+    alt.Chart(daily).mark_area(line={"strokeWidth": 1.5}).encode(
+        x="billing_date:T",                              # date, on the x-axis
+        y=alt.Y(
+            "energy_generated_kwh:Q",
+            stack="zero",                                 # stack plants instead of overlapping them
+        ),
+        color="name:N",                                   # one color per plant
+    )
+    '''
+    nf.slide(
+        # The dashboard's own copy is sized to fill a full-width panel - far
+        # wider than half a slide - so shrink this one back to half-slide.
+        nf.two_col(
+            nf.code(_code),
+            dashboard.defs["line_chart"].properties(width=510, height=320),
+            ratio=(1, 1),
+        ),
+        title="Plotting a chart",
+        kicker="Altair, stacked area",
+        # The chart keeps the dashboard's own fixed pixel size (so it's the
+        # *same* chart, not a redrawn one) - that's taller than this denser
+        # slide's default top margin leaves room for, so buy the room back
+        # the same way the ingestion slide does.
+        pad_top="5cqw",
+    )
+    return
+
+
+@app.cell
+def _(dashboard, mo):
+    _plants = dashboard.defs["dim_plants"]
+    _billing = dashboard.defs["fact_billing"]
+    # Fresh widgets, not the *same* objects as the dashboard slide: a
+    # marimo UI element is bound to exactly one live DOM mount, so
+    # displaying `dashboard.defs["date_from"]` a second time here left a
+    # second, inert copy that didn't respond to clicks - only the first
+    # mount (on the dashboard slide) was actually wired up. These are
+    # independent, so clicking them here works, at the cost of no longer
+    # being in sync with the dashboard slide's own filters. (A UI element's
+    # `.value` can't be read in the same cell that creates it, hence the
+    # split from the slide-building cell below.)
+    location_filter = mo.ui.multiselect(
+        options=sorted(_plants["name"]), value=sorted(_plants["name"])
+    )
+    date_from = mo.ui.date(value=_billing["billing_date"].min().date())
+    date_to = mo.ui.date(value=_billing["billing_date"].max().date())
+    return date_from, date_to, location_filter
+
+
+@app.cell
+def _(date_from, date_to, location_filter, mo, nf):
+    _code = '''
+    location_filter = mo.ui.multiselect(
+        options=sorted(dim_plants["name"]), value=sorted(dim_plants["name"])
+    )
+    date_from = mo.ui.date(value=min_date)
+    date_to = mo.ui.date(value=max_date)
+
+    mo.hstack([location_filter, date_from, date_to])
+
+    # each widget's current value, live:
+    f"{len(location_filter.value)} plants, {date_from.value} to {date_to.value}"
+    '''
+    # `wrap=True` is load-bearing, not cosmetic: with all 7 plants selected
+    # by default, the multiselect's own chip row is already wide enough
+    # that an unwrapped hstack pushed both date pickers past the slide's
+    # right edge - clicking where they *should* be hit nothing, which is
+    # exactly the "dates picker don't work at all" bug this fixes.
+    _widgets = mo.as_html(
+        mo.hstack(
+            [location_filter, date_from, date_to], justify="start", gap=2, wrap=True
+        )
+    ).text
+    # marimo's date widget is dark-mode-aware, but *this notebook's* own
+    # display theme is "light" (marimo's default), so by itself it renders
+    # with light colors - white text on a white control - regardless of
+    # this slide's navy paint. Its shadow-DOM styles pick their palette via
+    # `:host-context(.dark)`, which checks for a `.dark` class anywhere in
+    # the *light-DOM* ancestor chain (crossing the shadow boundary is what
+    # `:host-context` is for) - so just wrapping it in one here is enough,
+    # no per-property overrides needed (and none would reach past the
+    # shadow boundary anyway).
+    nf.slide(
+        nf.code(_code),
+        mo.Html(f'<div class="dark">{_widgets}</div>'),
+        nf.caption(
+            f"Selected: **{len(location_filter.value)} plants**, "
+            f"**{date_from.value}** to **{date_to.value}** - click a plant "
+            "chip or a date above and this line updates."
+        ),
+        title="Filters, straight from marimo",
+        kicker="mo.ui, not a custom form",
+        # Wrapping the widget row (so the date pickers stay on-slide, see
+        # above) added a second row's worth of height - buy that back too.
+        pad_top="5cqw",
+        gap="1.2cqw",
+    )
+    return
+
+
+@app.cell
+def _(nf):
+    _code = '''
+    plant_sel = alt.selection_point(
+        fields=["name"], on="click", clear="dblclick", empty="all"
+    )
+
+    # added to all four charts, then combined into one Vega-Lite spec
+    chart.add_params(plant_sel).encode(
+        opacity=alt.condition(plant_sel, alt.value(1.0), alt.value(0.2))
+    )
+    '''
+    nf.slide(
+        nf.code(_code),
         nf.bullets(
             [
-                "What do we mean by data platform?",
-                "Is it a good idea?",
-                "How would you even do it?",
-                "Why would it be better than using a proprietary alternative?",
+                "One selection object, reused across the map, the line chart, the sankey and the bar chart",
+                "Each chart dims everything except the selected plant via the same opacity condition",
+                "Vega-Lite recognizes the shared param and keeps every chart's click state in sync - no callbacks, no server round-trip",
             ]
         ),
-        title="In this presentation",
-        page=4,
+        title="Crossfiltering, for free",
+        kicker="One selection, four charts",
     )
     return
 
@@ -361,150 +615,6 @@ def _(nf):
     nf.slide(
         title="Data storage"
     )
-    return
-
-
-@app.cell
-def _(nf):
-    nf.slide(
-        nf.stats(
-            [
-                ("15m+", "Downloads", "every week"),
-                ("1192k+", "Contributions", "every year"),
-                ("166+", "Packages", "maintained by us"),
-                ("10+", "Years", "of open source at Nearform"),
-            ]
-        ),
-        title="Open source at Nearform",
-        kicker="Why us",
-        page=5,
-    )
-    return
-
-
-@app.cell
-def _(nf):
-    nf.slide(
-        nf.two_col(
-            nf.body(
-                "Node.js is an open source, cross-platform JavaScript runtime. "
-                "Nearform has been instrumental to its development since the "
-                "earliest releases."
-            ),
-            nf.metrics(
-                [
-                    ("57.3m", "Lines of code changed"),
-                    ("25", "Employee contributors"),
-                    ("7.1k", "Contributions"),
-                    ("7th", "Most active contributor"),
-                ]
-            ),
-            ratio=(3, 2),
-        ),
-        title="We love Node.js",
-        kicker="Nearform OSS",
-        page=6,
-    )
-    return
-
-
-@app.cell
-def _(nf):
-    nf.section("What we are building", kicker="OS Data Platform")
-    return
-
-
-@app.cell
-def _(nf):
-    nf.slide(
-        nf.quote(
-            "At the heart of Nearform's mission is a profound commitment to the "
-            "Node.js ecosystem and the OpenJS Foundation.",
-            author="Robin Ginn",
-            role="Executive Director, OpenJS Foundation",
-        ),
-        page=7,
-    )
-    return
-
-
-@app.cell
-def _(nf):
-    nf.slide(
-        nf.cards(
-            [
-                ("Iceberg", "Open table format. Catalog is the hard part."),
-                ("DuckDB", "The engine that made local analytics fun again."),
-                ("marimo", "This deck. Reactive notebook, reveal.js underneath."),
-            ]
-        ),
-        title="The pieces",
-        page=8,
-    )
-    return
-
-
-@app.cell
-def _(nf):
-    nf.slide(
-        nf.code(
-            """
-            import duckdb
-
-            con = duckdb.connect()
-            con.sql("INSTALL iceberg; LOAD iceberg;")
-            con.sql("SELECT count(*) FROM iceberg_scan('s3://lake/events')")
-            """
-        ),
-        nf.caption("Runs against the local MinIO stack - no cloud account needed."),
-        title="Reading the lake",
-        page=9,
-    )
-    return
-
-
-@app.cell
-def _(mo, nf):
-    # Anything marimo can render drops straight into a slide.
-    _demo = mo.ui.slider(1, 10, value=4, label="partitions")
-    nf.slide(_demo, title="Live, on the slide", kicker="Demo", page=10)
-    return
-
-
-@app.cell
-def _(nf):
-    nf.slide(
-        nf.bullets(
-            [
-                "Nearform Brand Hub - logos, fonts, the full deck template",
-                "github.com/nearform - everything we maintain",
-                "nearform.com/careers - we're hiring",
-            ],
-            tone="pale",
-        ),
-        title="Resources",
-        tone="pale",
-        page=11,
-    )
-    return
-
-
-@app.cell
-def _(nf):
-    nf.closing("Questions", page=12)
-    return
-
-
-@app.cell
-def _():
-    # Rebuild layouts/example_deck.slides.json after adding or removing cells.
-    # One entry per cell, in order - the first one is the import cell, hence SKIP.
-    #
-    #     from template import SKIP, Cell, write_slides_layout
-    #     write_slides_layout(
-    #         "presentation/example_deck.py",
-    #         [SKIP, Cell(notes="30s - who I am"), ...],
-    #     )
     return
 
 

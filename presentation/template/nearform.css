@@ -98,7 +98,7 @@ body:has(.mo-slide) {
    code block stays a light card rather than fighting the palette - it reads as
    a deliberate panel on the navy field. */
 [data-nf-slide] :is(pre, code) {
-  font-family: var(--marimo-monospace-font), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: inherit;
 }
 [data-nf-slide] .codehilite {

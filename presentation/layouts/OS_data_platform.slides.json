@@ -21,14 +21,47 @@
       },
       {
         "type": "slide",
+        "speakerNotes": "The roadmap - what this talk actually answers."
+      },
+      {
+        "type": "slide",
         "speakerNotes": "The big question. Let it land, then move."
       },
       {
         "type": "skip"
       },
       {
+        "type": "skip"
+      },
+      {
+        "type": "skip"
+      },
+      {
         "type": "slide",
-        "speakerNotes": "The roadmap - what this talk actually answers."
+        "speakerNotes": "Live demo - the actual dashboard, embedded live from solar_dashboard.py. If it breaks, keep talking and fall back to describing it."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Ingestion: three CSVs straight into pandas dataframes. Point out the raw shapes."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Transformation: one merge to attach plant names, so downstream code never repeats the join."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Plotting: Altair stacked area chart, a handful of encode() calls."
+      },
+      {
+        "type": "skip"
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Filters: plain marimo mo.ui elements - these are the same live widgets as the dashboard slide."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Crossfiltering: one shared Vega-Lite selection param reused across all four charts."
       },
       {
         "type": "slide",
@@ -65,45 +98,6 @@
       {
         "type": "slide",
         "speakerNotes": "Postgres, DuckDB, ClickHouse - just the names for now."
-      },
-      {
-        "type": "slide",
-        "speakerNotes": "Fast: two stats, then move on."
-      },
-      {
-        "type": "slide",
-        "speakerNotes": "Node.js metrics."
-      },
-      {
-        "type": "slide",
-        "speakerNotes": "Section break - say the thesis out loud."
-      },
-      {
-        "type": "slide",
-        "speakerNotes": "Read the quote, don't paraphrase it."
-      },
-      {
-        "type": "slide",
-        "speakerNotes": "The pieces of the stack."
-      },
-      {
-        "type": "slide",
-        "speakerNotes": "Code slide. Press C to show the cell source."
-      },
-      {
-        "type": "slide",
-        "speakerNotes": "Live demo. If it breaks, keep talking."
-      },
-      {
-        "type": "slide",
-        "speakerNotes": "Leave this up during Q&A setup."
-      },
-      {
-        "type": "slide",
-        "speakerNotes": "Questions."
-      },
-      {
-        "type": "skip"
       }
     ],
     "deck": {

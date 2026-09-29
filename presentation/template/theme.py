@@ -90,7 +90,11 @@ SANS = (
 )
 #: Bitter is the template's pull-quote serif (slides 4, 6, 7).
 SERIF = "'Bitter', Georgia, 'Times New Roman', serif"
-MONO = "var(--marimo-monospace-font), ui-monospace, SFMono-Regular, Menlo, monospace"
+#: `var()` with no fallback is invalid - and thus drops the *entire*
+#: `font-family` declaration, not just that one name - the moment
+#: `--marimo-monospace-font` isn't defined in whatever page loads this (it
+#: isn't, here). The fallback list has to live *inside* the `var()` call.
+MONO = "var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)"
 
 # --------------------------------------------------------------------------
 # Geometry

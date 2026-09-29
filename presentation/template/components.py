@@ -59,6 +59,7 @@ __all__ = [
     "tool",
     "stack",
     "code",
+    "dataframe",
     "image",
     "logo",
     "rule",
@@ -826,7 +827,12 @@ def two_col(
         _div(
             _style(
                 display="grid",
-                grid_template_columns=f"{ratio[0]}fr {ratio[1]}fr",
+                # A bare `Nfr` track's minimum width defaults to its content's
+                # min-content size, not zero - so a fixed-pixel-width child
+                # (a Vega chart, say) forces its track, and the whole grid,
+                # wider than the container instead of shrinking to fit. Wrap
+                # each track in `minmax(0, ...)` to let it actually shrink.
+                grid_template_columns=f"minmax(0,{ratio[0]}fr) minmax(0,{ratio[1]}fr)",
                 gap=gap,
                 align_items=align,
             ),
@@ -836,21 +842,95 @@ def two_col(
 
 
 def code(source: str, language: str = "python", tone: str = t.DEFAULT_TONE) -> mo.Html:
-    """A syntax-highlighted block sized for the deck.
+    """A syntax-highlighted, monospace code block sized for the deck.
+
+    Highlighted with Pygments directly, *not* via marimo's own markdown code
+    fences: those use Pygments too, but with its default style, which
+    assumes a light page and leaves at least one token color nearly
+    invisible against this deck's navy slides. ``dracula`` is one of
+    Pygments' own dark-background styles, and ``noclasses=True`` inlines
+    every color as a literal ``style=`` attribute rather than a CSS class,
+    so this renders correctly wherever it ends up embedded - no dependency
+    on a separate stylesheet actually being loaded in that context.
 
     This is for code you want to *show*. To show the code of the cell you are
     on, use marimo's own toggle (``C`` in slides mode) instead.
     """
     import textwrap
 
+    from pygments import highlight
+    from pygments.formatters import HtmlFormatter
+    from pygments.lexers import get_lexer_by_name
+
+    _source = textwrap.dedent(source).strip()
+    _formatter = HtmlFormatter(
+        style="dracula",
+        noclasses=True,
+        cssstyles=f"border-radius:{_S['radius']};",
+        prestyles=_style(
+            margin="0",
+            padding=f"{_S['gap_sm']} {_S['gap']}",
+            overflow_x="auto",
+            font_family=t.MONO,
+            # One step down from `SIZE["body"]` - code has more characters
+            # per line than prose, so the same size that reads fine for a
+            # sentence makes a multi-line snippet feel oversized on the slide.
+            font_size=t.SIZE["small"],
+        ),
+    )
+    _highlighted = highlight(_source, get_lexer_by_name(language), _formatter)
+    return mo.Html(_highlighted)
+
+
+def dataframe(
+    df: Any, *, max_rows: int = 5, label: str | None = None, tone: str = t.DEFAULT_TONE
+) -> mo.Html:
+    """A plain, static HTML table for a pandas DataFrame.
+
+    Deliberately *not* ``mo.ui.table`` / the bare-dataframe display: those
+    render as a JS-hydrated ``<marimo-table>`` custom element carrying its
+    data in a JSON-encoded attribute, which doesn't survive being nested
+    inside this template's string-based composition (``_render`` -> a raw
+    HTML string, re-embedded via more f-strings) - the attribute gets
+    mangled somewhere in that round trip, so the widget mounts but shows
+    empty rows. A plain ``<table>`` has no such round trip to survive.
+    """
     tn = t.tone(tone)
-    rendered = mo.as_html(
-        mo.md(f"```{language}\n{textwrap.dedent(source).strip()}\n```")
-    ).text
+    _rows = df.head(max_rows)
+    _cell_style = _style(
+        padding=f"{_S['tight']} {_S['tight']}",
+        border_bottom=f"1px solid {tn.rule}",
+        text_align="left",
+        white_space="nowrap",
+    )
+    # `_style()` joins declarations with `;` *internally* but doesn't add a
+    # trailing one - naively concatenating two calls glues the last
+    # declaration of one directly onto the first of the other with no
+    # separator (e.g. `...white-space:nowrap` + `color:#fff...` becomes the
+    # single invalid declaration `white-space:nowrapcolor:#fff`), which drops
+    # *both* properties silently rather than erroring. Force the join.
+    _head_style = _cell_style + ";" + _style(
+        color=tn.muted,
+        font_weight=t.WEIGHT["medium"],
+        text_transform="uppercase",
+        letter_spacing="0.06em",
+    )
+    _body_style = _cell_style + ";" + _style(color=tn.fg, font_family=t.MONO)
+    _head = "".join(f"<th style=\"{_head_style}\">{html.escape(str(c))}</th>" for c in _rows.columns)
+    _body = "".join(
+        "<tr>" + "".join(f"<td style=\"{_body_style}\">{html.escape(str(v))}</td>" for v in row) + "</tr>"
+        for row in _rows.itertuples(index=False)
+    )
+    _caption = label or f"{len(df):,} rows x {len(df.columns)} columns"
     return mo.Html(
         _div(
-            _style(font_size=t.SIZE["body"], line_height="1.5", color=tn.fg),
-            rendered,
+            _style(overflow_x="auto"),
+            f'<table style="{_style(border_collapse="collapse", font_size=t.SIZE["caption"], width="100%")}">'
+            f"<thead><tr>{_head}</tr></thead><tbody>{_body}</tbody></table>"
+            + _div(
+                _style(color=tn.muted, font_size=t.SIZE["caption"], margin_top=_S["tight"]),
+                html.escape(_caption),
+            ),
         )
     )
 

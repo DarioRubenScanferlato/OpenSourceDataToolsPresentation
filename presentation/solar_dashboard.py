@@ -8,24 +8,11 @@ app = marimo.App(
 )
 
 
-@app.cell
-def intro(mo):
-    # No page title by design (redundant with the browser tab/app title) -
-    # just the interaction hint, kept to one compact row so it costs as
-    # little vertical space as possible - see grid_layout's WIDTH_HALF/
-    # ROW_HEIGHT and the small `eyebrow()` section labels further down.
-    mo.Html(
-        '<div style="color:#8f9ab8; font-size:12px;">'
-        "Filter below, then <strong>click a plant</strong> on any chart to "
-        "highlight it everywhere (double-click to clear)."
-        "</div>"
-    )
-    return
-
-
 @app.cell(hide_code=True)
 def imports():
     import itertools
+    import math
+    import warnings
     from pathlib import Path
 
     import altair as alt
@@ -35,7 +22,7 @@ def imports():
 
     from template import theme as nf
 
-    return Path, alt, itertools, mo, nf, pd, vega_data
+    return Path, alt, itertools, math, mo, nf, pd, vega_data, warnings
 
 
 @app.cell(hide_code=True)
@@ -48,6 +35,10 @@ def branding(alt, itertools, nf):
     NF_FG = _tone.fg
     NF_MUTED = _tone.muted
     NF_RULE = _tone.rule
+    #: One step lighter than the page, for the Power BI-style card behind
+    #: each stat tile and chart - enough to read as a raised surface without
+    #: competing with the brand accents drawn on top of it.
+    NF_PANEL = "#0a1440"
 
     #: Six solid, distinguishable marks that read clearly against the navy
     #: background (this is theme.py's own ACCENTS ramp).
@@ -74,7 +65,7 @@ def branding(alt, itertools, nf):
             "config": {
                 "background": NF_BG,
                 "font": nf.SANS,
-                "title": {"color": NF_FG, "fontSize": 15, "fontWeight": 600, "anchor": "start"},
+                "title": {"color": NF_FG, "fontSize": 15, "fontWeight": 600, "anchor": "middle"},
                 "axis": {
                     "labelColor": NF_MUTED,
                     "titleColor": NF_FG,
@@ -92,27 +83,77 @@ def branding(alt, itertools, nf):
             }
         }
 
-    return CARD_ACCENTS, NF_BG, NF_FG, NF_MUTED, NF_RULE, plant_scale
+    return CARD_ACCENTS, NF_BG, NF_FG, NF_MUTED, NF_PANEL, NF_RULE, plant_scale
 
 
 @app.cell(hide_code=True)
-def grid_layout():
-    # A 12-column dashboard grid. The app runs at `width="full"` (no marimo
-    # max-width margin, just its own small page gutter), so the *declared*
-    # chart width below is tuned to the actual rendered width, which is
-    # substantially larger once Vega-Lite adds axis labels/legends on top of
-    # it - 924 declared renders to roughly the available column width on a
-    # 14"+ screen without forcing horizontal scrolling. Row height has no
-    # such ceiling (the page scrolls vertically), so it's sized generously.
-    GRID_COLUMNS = 12
-    GRID_UNIT = 77  # px per column, at a ~924px design width
-    WIDTH_FULL = GRID_UNIT * GRID_COLUMNS  # 924 (12/12)
-    WIDTH_HALF = GRID_UNIT * 6  # 462 (6/12)
+def grid_layout(NF_FG, NF_PANEL, NF_RULE, alt):
+    #: Vega-Lite renders the linked-explorer chart at a *fixed* pixel size,
+    #: which never grows or shrinks with the browser window, unlike the rest
+    #: of this `width="full"` page. Both the chart and the stat cards above
+    #: it are authored at this *design* width and scaled to the page's
+    #: actual width with the same CSS trick the main deck uses to embed this
+    #: dashboard full-bleed into a slide (`container-type: inline-size` +
+    #: `zoom: calc(100cqw / Npx)`, declared in nf-dashboard.css - see that
+    #: file for why it has to live there and not here; keep its number in
+    #: sync with this one).
+    DASHBOARD_WIDTH = 1518
 
-    #: Shared row height so same-row charts (matched widths summing to 12
-    #: columns) line up top and bottom, not just left and right.
-    ROW_HEIGHT = 320
-    return ROW_HEIGHT, WIDTH_HALF
+    #: The explorer is a 2x2 grid of equal-sized Power BI-style panels. Each
+    #: panel's card is drawn *inside* the Vega-Lite spec (see `panel()`), so
+    #: it also defines that view's full bounds - every grid slot ends up
+    #: exactly PANEL_W x PANEL_H whatever axes/legends each chart has, which
+    #: is what keeps the four panels aligned without any spacing fudges.
+    PANEL_GAP = 16
+    PANEL_W = (DASHBOARD_WIDTH - PANEL_GAP) // 2 - 2  # -2: the card's stroke, 1px per side
+    #: Sized so the whole dashboard fits one slide in the deck without
+    #: scrolling (filters + stat cards + two rows of panels).
+    PANEL_H = 375
+    PANEL_PAD = 14
+    PANEL_TITLE_H = 28  # title strip across the top of each panel
+
+    def plot_size(*, left: int = 0, right: int = 0, bottom: int = 0) -> tuple[int, int]:
+        """The plot-area (width, height) that fills one panel, leaving
+        `left`/`right`/`bottom` px for that chart's own axis/legend chrome
+        (on top of the panel's padding and title strip)."""
+        return (
+            PANEL_W - 2 * PANEL_PAD - left - right,
+            PANEL_H - 2 * PANEL_PAD - PANEL_TITLE_H - bottom,
+        )
+
+    def panel(chart, *, left: int = 0, right: int = 0, bottom: int = 0):
+        """Wrap a chart sized with `plot_size(...)` (same chrome arguments)
+        in a rounded card with its title top-left, Power BI style.
+
+        The card and title are just two extra layers - a `mark_rect` and a
+        `mark_text` positioned in pixels *around* the plot area, past its
+        axes - rather than HTML around the chart: all four charts have to
+        stay one compiled spec for the shared click selection to sync
+        (see `explorer_layout`), so there's no per-chart DOM node to style.
+        """
+        w, h = chart.width, chart.height
+        x0, y0 = -(PANEL_PAD + left), -(PANEL_PAD + PANEL_TITLE_H)
+        one_row = alt.InlineData(values=[{}])
+        card = alt.Chart(one_row).mark_rect(
+            fill=NF_PANEL, stroke=NF_RULE, cornerRadius=10
+        ).encode(
+            x=alt.value(x0),
+            x2=alt.value(w + PANEL_PAD + right),
+            y=alt.value(y0),
+            y2=alt.value(h + PANEL_PAD + bottom),
+        )
+        title = alt.Chart(one_row).mark_text(
+            align="left", baseline="top", color=NF_FG, fontSize=14, fontWeight=600
+        ).encode(
+            x=alt.value(x0 + PANEL_PAD),
+            y=alt.value(y0 + PANEL_PAD - 2),
+            text=alt.value(chart.title),
+        )
+        body = chart.copy()
+        body.title = body.width = body.height = alt.Undefined
+        return alt.layer(card, title, body).properties(width=w, height=h)
+
+    return DASHBOARD_WIDTH, PANEL_GAP, panel, plot_size
 
 
 @app.cell(hide_code=True)
@@ -163,7 +204,7 @@ def section_label_helper(mo):
 
 
 @app.cell(hide_code=True)
-def filters(billing, dim_plants, eyebrow, mo):
+def filters(NF_FG, billing, dim_plants, eyebrow, mo):
     _min_date = billing["billing_date"].min().date()
     _max_date = billing["billing_date"].max().date()
 
@@ -175,10 +216,31 @@ def filters(billing, dim_plants, eyebrow, mo):
     date_from = mo.ui.date(value=_min_date, start=_min_date, stop=_max_date, label="Date from")
     date_to = mo.ui.date(value=_max_date, start=_min_date, stop=_max_date, label="Date to")
 
+    # marimo's date widget colors its *background* via a token that reads
+    # the computed `color-scheme` (this notebook's own page is `body.light.
+    # light-theme`, so left alone it's white) - `color-scheme: dark` here
+    # fixes that the same way a custom property would, crossing the shadow
+    # boundary as a normal inherited CSS property, no `:host-context` class
+    # selector needed for it. But the widget's *text* just inherits `color`
+    # from its ancestors like any other element - with only `color-scheme`
+    # set, that inheritance still reaches past this wrapper to the page's
+    # own (dark-on-light) body text color, so the background went dark but
+    # the text didn't, which is just as unreadable as the original white-on-
+    # white (dark-on-dark instead of white-on-white). Set `color` here too
+    # so both the property `light-dark()` reads and the one plain
+    # inheritance carries are covered (nf-dashboard.css deliberately leaves
+    # marimo's own design tokens alone otherwise - see that file's docstring
+    # for why).
+    _widgets = mo.as_html(
+        mo.hstack([location_filter, date_from, date_to], justify="start", gap=2)
+    ).text
     mo.vstack(
         [
             eyebrow("Filters"),
-            mo.hstack([location_filter, date_from, date_to], justify="start", gap=2),
+            mo.Html(
+                f'<div class="dark" style="color-scheme:dark; color:{NF_FG};">'
+                f"{_widgets}</div>"
+            ),
         ],
         gap=0,
     )
@@ -214,7 +276,7 @@ def apply_filters(
 
 
 @app.cell(hide_code=True)
-def stat_card_helper(NF_BG, NF_FG, NF_MUTED, NF_RULE, mo):
+def stat_card_helper(NF_FG, NF_MUTED, NF_PANEL, NF_RULE, mo):
     def stat_card(value: str, label: str, accent: str) -> str:
         """A single brand-styled stat tile: a big accent-colored number over a
         muted label, in a bordered navy card - hand-rolled to match
@@ -223,8 +285,8 @@ def stat_card_helper(NF_BG, NF_FG, NF_MUTED, NF_RULE, mo):
         are kept small so the whole dashboard fits a 14" laptop screen."""
         return f"""
         <div style="
-            background:{NF_BG}; border:1px solid {NF_RULE}; border-radius:10px;
-            padding:6px 10px; flex:1; min-width:0;
+            background:{NF_PANEL}; border:1px solid {NF_RULE}; border-radius:10px;
+            padding:6px 10px; min-width:0;
         ">
           <div style="color:{accent}; font-size:17px; font-weight:800; line-height:1.1; overflow-wrap:anywhere;">
             {value}
@@ -237,8 +299,25 @@ def stat_card_helper(NF_BG, NF_FG, NF_MUTED, NF_RULE, mo):
 
 
     def stat_row(cards: list[str]) -> "mo.Html":
+        # A 4-column grid, one card per column, authored at `DASHBOARD_WIDTH`
+        # and scaled to the page's actual width the same way the chart is
+        # (nf-dashboard.css's `.react-grid-item:has(.nf-stat-cards)` rule) -
+        # rather than `display:flex` filling whatever width the page
+        # happens to give this block (under `width="full"`, close to the
+        # full viewport), which left a wide empty gap between the cards and
+        # the (fixed-size, chrome-and-all) chart below it. `nf-stat-cards`
+        # is just an anchor for that CSS rule's `:has()` to find this cell's
+        # grid item by - the scaling itself happens there, not here, for
+        # the same reason the chart's own scaling lives in that CSS file
+        # rather than in a cell: this cell's own output sits *inside* that
+        # grid item's own padding, so a container-type/zoom pair declared
+        # from here can only ever fill the padded content area, not the
+        # full cell (which is what actually left it narrower than the
+        # chart next to it).
         return mo.Html(
-            f'<div style="display:flex; gap:10px; color:{NF_FG};">{"".join(cards)}</div>'
+            f'<div class="nf-stat-cards" style="display:grid; '
+            f'grid-template-columns:repeat(4, 1fr); gap:10px; color:{NF_FG};">'
+            f'{"".join(cards)}</div>'
         )
 
     return stat_card, stat_row
@@ -302,14 +381,14 @@ def plant_selection(alt):
 
 @app.cell(hide_code=True)
 def map_chart(
-    NF_FG,
-    ROW_HEIGHT,
-    WIDTH_HALF,
     alt,
     dim_plants,
     location_filter,
+    math,
+    panel,
     plant_scale,
     plant_sel,
+    plot_size,
     vega_data,
 ):
     # A single combined chart (this cell, `line_chart`, `sankey_chart_out` and
@@ -320,10 +399,59 @@ def map_chart(
     # they must not be individually wrapped/displayed on their own.
     _plants_in_scope = dim_plants[dim_plants["name"].isin(location_filter.value)].copy()
     _world = alt.topo_feature(vega_data.world_110m.url, "countries")
+    _w, _h = plot_size()  # no axes or legend - the map fills its panel
+
+    # Vega's automatic projection-fitting frames the *whole world* topojson,
+    # which - since none of the plants are anywhere near the Pacific - left
+    # a lot of empty ocean bunched up on the left specifically, rather than
+    # cropped away. `center`/`rotate` alone can't fix this: auto-fit always
+    # re-centers the *whole world's* bounding box regardless of rotation,
+    # so the result looks identical no matter where you recenter it.
+    #
+    # Fixing it means computing `scale`/`translate` by hand from D3's own
+    # naturalEarth1 formula (the reference implementation; this deck's other
+    # projections all fit the whole world so didn't need this) - projecting
+    # every plant, then choosing a scale/translate that frames *just* that
+    # bounding box (all plants, not only the currently filtered ones, so
+    # the map doesn't rezoom every time the location filter changes).
+    def _natural_earth1_xy(lon_deg, lat_deg):
+        lam, phi = math.radians(lon_deg), math.radians(lat_deg)
+        phi2 = phi * phi
+        phi4 = phi2 * phi2
+        x = lam * (
+            0.8707
+            + phi2 * (-0.131979 + phi4 * (-0.013791 + phi4 * (0.003971 * phi2 - 0.001529 * phi4)))
+        )
+        y = phi * (
+            1.007226 + phi2 * (0.015085 + phi4 * (-0.044475 + 0.028874 * phi2 - 0.005916 * phi4))
+        )
+        return x, y
+
+    _xy = [_natural_earth1_xy(lon, lat) for lon, lat in zip(dim_plants["longitude"], dim_plants["latitude"])]
+    _xs, _ys = [p[0] for p in _xy], [p[1] for p in _xy]
+    _pad = 1.15  # extra room around the data so points don't sit flush on an edge
+    _span_x, _span_y = (max(_xs) - min(_xs)) * _pad, (max(_ys) - min(_ys)) * _pad
+    _map_scale = min(_w / _span_x, _h / _span_y)
+    _cx, _cy = (max(_xs) + min(_xs)) / 2, (max(_ys) + min(_ys)) / 2
+    # D3/Vega's own projection pipeline negates y internally (so that north -
+    # positive latitude, positive raw y - ends up at the *smaller* screen y,
+    # i.e. the top): the actual on-screen y is `translate[1] - scale * y`, not
+    # `+`. Solving `_h/2 == translate[1] - scale*cy` for the center
+    # therefore needs a `+` here, even though the x version above is a `-`.
+    # Getting this backwards doesn't show up at a loose pad - the resulting
+    # vertical offset error is small enough that points stay on-canvas by
+    # luck - but it silently pushes points off the top of the frame once
+    # `scale` grows for a tighter pad, which is exactly the bug that made 5
+    # of these 7 plants vanish from the map when `_pad` was tightened.
+    _map_translate = [_w / 2 - _map_scale * _cx, _h / 2 + _map_scale * _cy]
 
     _basemap = (
         alt.Chart(_world)
-        .mark_geoshape(fill="#0a1440", stroke="#1e2a54", strokeWidth=0.4)
+        # Land one step lighter than the panel it sits on (the panel itself
+        # took over this basemap's old fill), clipped to the plot area so
+        # the countries cropped out by the tight framing don't spill past
+        # the panel's edges.
+        .mark_geoshape(fill="#16225a", stroke="#2a3868", strokeWidth=0.4, clip=True)
     )
 
     _points = (
@@ -334,24 +462,13 @@ def map_chart(
             latitude="latitude:Q",
             size=alt.Size(
                 "capacity_mw:Q",
-                title="Capacity (MW)",
                 scale=alt.Scale(range=[80, 900]),
-                legend=alt.Legend(
-                    # Size-legend swatches default to a black fill, invisible
-                    # on the navy background - force them to a light,
-                    # high-contrast color instead (independent of the
-                    # per-plant point colors).
-                    symbolFillColor=NF_FG,
-                    symbolStrokeColor=NF_FG,
-                    # naturalEarth1 leaves a wide empty gap of open ocean at
-                    # the left of this map (none of the plants are in the
-                    # Pacific) - a corner orientation renders as an inset
-                    # *inside* the plot bounds (unlike "left"/"right", which
-                    # reserve extra room outside it), dropping the legend
-                    # into that dead space instead of a separate column.
-                    orient="top-left",
-                    fillColor="transparent",
-                ),
+                # This fleet is spread across the whole globe, so at this
+                # map's tight framing there's no corner a legend can sit in
+                # that's guaranteed clear of every plant point - it always
+                # ends up overlapping *something*. Simplest fix: no legend;
+                # tooltips already carry each plant's exact capacity.
+                legend=None,
             ),
             # No color legend: with 7 plants sharing a 6-color ramp, a legend
             # doesn't add much and clutters the row - tooltips and the shared
@@ -372,18 +489,27 @@ def map_chart(
 
     map_chart = (
         (_basemap + _points)
-        .project("naturalEarth1")
-        .properties(width=WIDTH_HALF, height=ROW_HEIGHT, title="Plant locations")
+        .project("naturalEarth1", scale=_map_scale, translate=_map_translate)
+        .properties(width=_w, height=_h, title="Plant locations")
     )
-    return (map_chart,)
+    map_panel = panel(map_chart)
+    return (map_panel,)
 
 
 @app.cell(hide_code=True)
-def line_chart(ROW_HEIGHT, WIDTH_HALF, alt, billing_f, plant_scale, plant_sel):
+def line_chart(alt, billing_f, panel, plant_scale, plant_sel, plot_size):
     _daily = (
         billing_f.groupby(["name", "billing_date"], as_index=False)["energy_generated_kwh"]
         .sum()
     )
+    # y-axis: fixed-width tick labels ("2.2M" via `~s`) plus its title;
+    # x-axis: dates only - "Date" as a title would just restate the ticks.
+    _Y_AXIS = 40
+    _chrome = {"left": _Y_AXIS + 22, "bottom": 22}
+    # Axes draw *under* a view's marks by default - here that's under the
+    # panel card too, so they need lifting above it.
+    _ON_TOP = 1
+    _w, _h = plot_size(**_chrome)
 
     line_chart = (
         alt.Chart(_daily)
@@ -394,9 +520,14 @@ def line_chart(ROW_HEIGHT, WIDTH_HALF, alt, billing_f, plant_scale, plant_sel):
         # place, one on top of the other in scale-domain order.
         .mark_area(line={"strokeWidth": 1.5}, interpolate="monotone")
         .encode(
-            x=alt.X("billing_date:T", title="Date"),
+            x=alt.X("billing_date:T", title=None, axis=alt.Axis(format="%b %d", zindex=_ON_TOP)),
             y=alt.Y(
-                "energy_generated_kwh:Q", title="Energy generated (kWh)", stack="zero"
+                "energy_generated_kwh:Q",
+                title="Energy generated (kWh)",
+                stack="zero",
+                axis=alt.Axis(
+                    format="~s", minExtent=_Y_AXIS, maxExtent=_Y_AXIS, zindex=_ON_TOP
+                ),
             ),
             order=alt.Order("name:N"),
             color=alt.Color(
@@ -409,10 +540,11 @@ def line_chart(ROW_HEIGHT, WIDTH_HALF, alt, billing_f, plant_scale, plant_sel):
                 alt.Tooltip("energy_generated_kwh:Q", title="kWh", format=",.0f"),
             ],
         )
-        .properties(width=WIDTH_HALF, height=ROW_HEIGHT, title="Daily energy production by plant (stacked)")
+        .properties(width=_w, height=_h, title="Daily energy production by plant (stacked)")
         .add_params(plant_sel)
     )
-    return (line_chart,)
+    line_panel = panel(line_chart, **_chrome)
+    return line_chart, line_panel
 
 
 @app.cell(hide_code=True)
@@ -430,6 +562,7 @@ def sankey_helper(NF_FG, alt, pd):
         color_scale: alt.Scale | None = None,
         node_color: str = NF_FG,
         selection: alt.Parameter | None = None,
+        label_margin: int = 0,
     ) -> alt.LayerChart:
         """Hand-rolled two-column sankey (source -> target) built from mark_area
         ribbons - copied from co2_gdp_dashboard.py's sankey_helper and extended
@@ -438,6 +571,14 @@ def sankey_helper(NF_FG, alt, pd):
 
         nodes_df: id, label, column (0=left, 1=right), value, order[, name]
         links_df: source (id), target (id), value, color (grouping field)[, name]
+
+        `label_margin` reserves that many px on each side for the node
+        labels, inset *within* the declared `width` rather than the default
+        0 (the original co2_gdp_dashboard.py behavior, labels drawn past the
+        node edge via a negative/positive `dx` - fine on its own, but this
+        chart is composed with three others in a grid elsewhere, and a
+        Vega-Lite grid that has to keep multiple views aligned can end up
+        clipping content that overflows a view's declared bounds like that).
         """
         color_scale = color_scale if color_scale is not None else alt.Scale()
 
@@ -460,7 +601,10 @@ def sankey_helper(NF_FG, alt, pd):
         out_cursor = {nid: layout[nid]["y0"] for nid in layout}
         in_cursor = {nid: layout[nid]["y0"] for nid in layout}
 
-        node_x = {0: (0, node_width), 1: (width - node_width, width)}
+        node_x = {
+            0: (label_margin, label_margin + node_width),
+            1: (width - label_margin - node_width, width - label_margin),
+        }
 
         def ease(t: float) -> float:
             return t * t * (3 - 2 * t)
@@ -512,8 +656,12 @@ def sankey_helper(NF_FG, alt, pd):
             alt.Chart(ribbon_df)
             .mark_area(interpolate="linear")
             .encode(
-                x=alt.X("x:Q", axis=None),
-                y=alt.Y("y_bot:Q", axis=None, scale=alt.Scale(reverse=True)),
+                # Pin both scales to the declared pixel box: left to the data
+                # extent, x would start at the first node (`label_margin`),
+                # not 0, stretching the diagram over the space reserved for
+                # its labels and pushing them outside the chart.
+                x=alt.X("x:Q", axis=None, scale=alt.Scale(domain=[0, width])),
+                y=alt.Y("y_bot:Q", axis=None, scale=alt.Scale(domain=[0, height], reverse=True)),
                 y2="y_top:Q",
                 detail="link_id:N",
                 color=alt.Color("color:N", scale=color_scale, legend=None),
@@ -582,12 +730,12 @@ def sankey_helper(NF_FG, alt, pd):
 
 @app.cell(hide_code=True)
 def sankey_build(
-    ROW_HEIGHT,
-    WIDTH_HALF,
     billing_f,
+    panel,
     pd,
     plant_scale,
     plant_sel,
+    plot_size,
     sankey_chart,
 ):
     # Real accounting, not an assumption: `fact_energy_billing` already
@@ -613,7 +761,14 @@ def sankey_build(
     sankey_nodes = pd.DataFrame(
         [
             {
-                "id": f"plant::{name}", "label": name, "name": name,
+                "id": f"plant::{name}",
+                # Every plant name here ends in "Solar Farm" - dropping that
+                # redundant suffix (the tooltip and every other chart still
+                # show the full name) roughly halves the longest label,
+                # which is what actually lets `label_margin` below stay
+                # small instead of eating most of the chart's width.
+                "label": name.removesuffix(" Solar Farm"),
+                "name": name,
                 "column": 0, "value": val, "order": i,
             }
             for i, (name, val) in enumerate(_plant_totals.items())
@@ -646,33 +801,71 @@ def sankey_build(
     )
     sankey_links = sankey_links[sankey_links["value"] > 0]
 
+    # Node labels are inset within the plot (`label_margin`), so no chrome.
+    _w, _h = plot_size()
     sankey_chart_out = sankey_chart(
         sankey_nodes,
         sankey_links,
-        width=WIDTH_HALF,
-        height=ROW_HEIGHT,
+        width=_w,
+        height=_h,
         color_scale=plant_scale(_plant_names),
         selection=plant_sel,
+        label_margin=110,
     ).properties(title="Energy allocation by plant: generated → exported / self-consumed / curtailed")
-    return (sankey_chart_out,)
+    sankey_panel = panel(sankey_chart_out)
+    return (sankey_panel,)
 
 
 @app.cell(hide_code=True)
-def bar_chart(ROW_HEIGHT, WIDTH_HALF, alt, maintenance_f, plant_sel):
+def bar_chart(alt, maintenance_f, panel, plant_sel, plot_size):
     _cost_by_plant_type = (
         maintenance_f.groupby(["name", "event_type"], as_index=False)["cost_eur"].sum()
     )
+    # Raw values are snake_case identifiers ("corrective_repair") - fine for
+    # code, not for a legend/tooltip a human reads. Clean the *data* once
+    # here rather than patching it up per-encoding with a Vega `labelExpr`,
+    # so the legend and the tooltip (which shows the same field) both get
+    # the readable form for free, and stay in sync if it changes.
+    _cost_by_plant_type["event_type"] = _cost_by_plant_type["event_type"].str.replace(
+        "_", " "
+    ).str.capitalize()
+
+    # y-axis: plant names at a fixed width; below the plot, the x-axis (with
+    # its title) and then the event-type legend laid out in one row.
+    _Y_AXIS = 100
+    _chrome = {"left": _Y_AXIS + 4, "bottom": 62}
+    _ON_TOP = 1  # axes above the panel card - see `line_chart`
+    _w, _h = plot_size(**_chrome)
 
     bar_chart = (
         alt.Chart(_cost_by_plant_type)
         .mark_bar()
         .encode(
-            x=alt.X("cost_eur:Q", title="Maintenance cost (EUR)", stack="zero"),
-            y=alt.Y("name:N", title=None, sort="-x"),
+            x=alt.X(
+                "cost_eur:Q",
+                title="Maintenance cost (EUR)",
+                stack="zero",
+                axis=alt.Axis(format="~s", zindex=_ON_TOP),
+            ),
+            y=alt.Y(
+                "name:N",
+                title=None,
+                sort="-x",
+                # Same shortening as the sankey's node labels: every plant
+                # name ends in "Solar Farm" (the tooltip keeps the full name).
+                axis=alt.Axis(
+                    labelExpr="replace(datum.label, ' Solar Farm', '')",
+                    minExtent=_Y_AXIS,
+                    maxExtent=_Y_AXIS,
+                    labelLimit=_Y_AXIS,
+                    zindex=_ON_TOP,
+                ),
+            ),
             color=alt.Color(
                 "event_type:N",
                 title="Event type",
                 scale=alt.Scale(scheme="set2"),
+                legend=alt.Legend(orient="bottom", direction="horizontal", titleOrient="left", offset=10),
             ),
             opacity=alt.condition(plant_sel, alt.value(1.0), alt.value(0.3)),
             tooltip=[
@@ -681,38 +874,78 @@ def bar_chart(ROW_HEIGHT, WIDTH_HALF, alt, maintenance_f, plant_sel):
                 alt.Tooltip("cost_eur:Q", title="Cost (EUR)", format=",.0f"),
             ],
         )
-        .properties(width=WIDTH_HALF, height=ROW_HEIGHT, title="Maintenance cost by plant")
+        .properties(width=_w, height=_h, title="Maintenance cost by plant")
         .add_params(plant_sel)
     )
-    return (bar_chart,)
+    bar_panel = panel(bar_chart, **_chrome)
+    return (bar_panel,)
 
 
 @app.cell(hide_code=True)
-def explorer_layout(bar_chart, line_chart, map_chart, mo, sankey_chart_out):
-    # Combine all four unit charts into ONE compiled Vega-Lite spec (a 2x2
-    # grid via hconcat + vconcat) and wrap that combined spec in a single
+def explorer_layout(
+    PANEL_GAP,
+    alt,
+    bar_panel,
+    line_panel,
+    map_panel,
+    mo,
+    sankey_panel,
+    warnings,
+):
+    # Combine all four paneled charts into ONE compiled Vega-Lite spec (a
+    # 2x2 grid via hconcat + vconcat) and wrap that combined spec in a single
     # `mo.ui.altair_chart` - this is what lets the one `plant_sel` selection,
     # added to each chart above, stay in sync across all of them live in the
     # browser: clicking a plant on any chart re-highlights it on the rest.
     # Vega-Lite's default "shared" scale resolution only unifies same-field
-    # color scales within *one* concat operator - `sankey_chart_out` colors by
-    # plant ("name") while `bar_chart` colors by `event_type`, so that inner
-    # hconcat needs its own independent resolve too, not just the outer one.
-    # `size="independent"` keeps the map's own Capacity legend anchored next
-    # to the map instead of drifting to the right of the whole row (its
-    # default position once resolution is "shared", the line chart's side).
-    _row1 = (map_chart | line_chart).resolve_scale(color="independent").resolve_legend(
-        size="independent"
-    )
-    _row2 = (sankey_chart_out | bar_chart).resolve_scale(color="independent")
-    explorer = (
-        (_row1 & _row2)
-        .resolve_scale(color="independent")
-        .resolve_legend(color="independent")
-        .configure_view(strokeWidth=0)
-    )
+    # color scales within *one* concat operator - the sankey colors by plant
+    # ("name") while the bar chart colors by `event_type`, so each column
+    # needs its own independent resolve too, not just the outer one.
+    #
+    # Reusing the *same* `plant_sel` object across all four charts (rather
+    # than four separate-but-identical selections) is exactly what makes
+    # Vega-Lite treat them as one shared, synced selection - Altair's own
+    # "deduplicated selection parameter" warning is just it noticing that on
+    # purpose, so it's silenced here rather than left to alarm anyone
+    # reading the terminal during a live demo.
+    #
+    # Grouped by ROW, and no alignment compensation needed: every panel's
+    # card spans its chart's axes and legend (see grid_layout's `panel()`),
+    # so all four grid slots are exactly the same size, and every chart has
+    # the same top chrome (the title strip), so a row's plots line up too.
+    # (Grouping by column instead would line up each column's *plot
+    # origins* - different for the line and bar charts' different y-axes -
+    # pushing their cards out of line. `alt.concat(..., align="all")` is
+    # off the table too: in this combination it broke every tooltip and the
+    # sankey's text labels.)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message=r"Automatically deduplicated selection parameter.*"
+        )
+        _rows = [
+            (map_panel | line_panel).resolve_scale(color="independent"),
+            (sankey_panel | bar_panel).resolve_scale(color="independent"),
+        ]
+        explorer = (
+            alt.vconcat(*_rows, spacing=PANEL_GAP)
+            .resolve_scale(color="independent")
+            .resolve_legend(color="independent")
+            # no outer padding, so the chart renders exactly DASHBOARD_WIDTH wide
+            .properties(padding=0)
+            .configure_concat(spacing=PANEL_GAP)
+            # No grid lines: axes are lifted above the panel card (`zindex`
+            # on each chart's axes), so grid lines would cross areas/bars.
+            .configure_axis(grid=False)
+            .configure_view(strokeWidth=0)
+        )
 
-    explorer_view = mo.ui.altair_chart(explorer)
+    # No vega-embed "..." actions menu: while it's enabled, vega-embed pads
+    # its wrapper 38px on the right for the button, which clips the last
+    # 38px of this exactly-DASHBOARD_WIDTH chart. `mo.ui.altair_chart` reads
+    # altair's renderer `embed_options` once, at construction - so scoping
+    # them to this `with` keeps every other chart's menu as it is.
+    with alt.renderers.enable(alt.renderers.active, embed_options={"actions": False}):
+        explorer_view = mo.ui.altair_chart(explorer)
     explorer_view
     return
 

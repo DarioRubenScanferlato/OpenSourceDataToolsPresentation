@@ -98,3 +98,61 @@ body {
 .console-output-area {
   background-color: #0a1440 !important;
 }
+
+/* Both dashboards this file serves are dark-themed end to end, but Radix/
+   react-aria popovers (the date-picker calendar, dropdown menus, ...)
+   portal straight to `document.body`, escaping any local wrapper a
+   notebook cell puts around the *trigger* - a plain rule reaches them
+   fine here (they're light-DOM, not shadow-DOM like the date field's own
+   input box was - see that notebook's `filters` cell for the shadow-DOM
+   side of this), they just don't inherit a useful `color-scheme` from
+   anywhere by default, so their own `light-dark()`-based tokens
+   (`--popover`, `--popover-foreground`, ...) resolve to their light
+   branch regardless of the rest of the page. */
+.bg-popover {
+  color-scheme: dark;
+}
+
+/* solar_dashboard.py only: the linked-explorer Vega-Lite chart and the stat
+   cards above it are both authored at a *fixed* pixel width
+   (`DASHBOARD_WIDTH` in that notebook's `grid_layout` cell - keep the
+   number below in sync with it), which doesn't track this `width="full"`
+   page's actual size the way the rest of the dashboard does. Both get
+   scaled to the page's real width with the same zoom-to-fill trick the
+   main deck uses to embed this dashboard full-bleed into a slide
+   (`container-type: inline-size` + `zoom: calc(100cqw / Npx)`) -
+   `:has(...)` finds each one's grid cell without needing that cell's own
+   dynamic output id, and `.react-grid-item` is stable (co2_gdp_dashboard.py,
+   this file's other consumer, runs at `width="medium"` with no grid
+   layout, so it has no `.react-grid-item` at all - this can't reach it).
+
+   This has to be a real stylesheet (loaded through `css_file`), not a
+   `<style>` tag from a cell - marimo's HTML sanitizer strips `<style>`
+   elements from cell output, so one never reaches the page. It also has to
+   target each grid item directly rather than something a cell's own output
+   builds and wraps itself in: that output sits *inside* the grid item's own
+   padding, so a container-type/zoom pair declared from inside it can only
+   ever fill the padded content area, not the full cell - which is exactly
+   what left the stat cards narrower than the chart next to them when they
+   tried to do their own scaling that way (a `responsive()` helper, since
+   removed) instead of through this file.
+
+   The chart specifically also ruled out one more approach: targeting
+   `.vega-embed` (vega-embed's own top-level wrapper) directly, rather than
+   the grid item. That one's inside `marimo-vega`'s shadow root, which no
+   amount of selector specificity from a page-level stylesheet can reach;
+   Shadow DOM blocks *style resolution* from outside, full stop. `zoom`
+   doesn't have that problem - it's a paint-time effect, applied to
+   whatever the target element (and everything inside it, shadow root or
+   not) has already resolved to - so sizing the plain, light-DOM wrapper
+   marimo puts around the whole custom element still visually scales the
+   chart inside it correctly. */
+.react-grid-item:has(marimo-vega),
+.react-grid-item:has(.nf-stat-cards) {
+  container-type: inline-size;
+}
+.react-grid-item:has(marimo-vega) > div,
+.react-grid-item:has(.nf-stat-cards) > div {
+  width: 1518px;
+  zoom: calc(100cqw / 1518px);
+}
