@@ -1,0 +1,65 @@
+<!--
+Two ways to get at source data. Airbyte copies it (extract-load): connectors
+read from databases, APIs and files and land it in the lake or warehouse,
+incrementally. Trino leaves it where it is: one SQL query is split by the
+coordinator and pushed to each source through its connector, and only the
+results come back. Logos are the projects' own (../logos/), embedded by
+template.assets.svg(); the packets loop on their own.
+-->
+<svg id="ingest" viewBox="0 0 800 330" width="100%" xmlns="http://www.w3.org/2000/svg" style="display:block; font-family:inherit; cursor:pointer;">
+<rect x="0" y="0" width="390" height="330" rx="14" fill="#0a1440" stroke="#1E2A54" stroke-width="1.5" ></rect><rect x="16" y="0" width="358" height="5" rx="2.5" fill="#8950FF" stroke="none" stroke-width="1.5" ></rect>
+<image x="18" y="20" width="30" height="30" href="../logos/airbyte.svg"><title>Airbyte</title></image>
+<text x="58" y="42" font-size="20" fill="#FFFFFF" text-anchor="start" font-weight="700" >Airbyte</text>
+<text x="146.5" y="42" font-size="15" fill="#8F9AB8" text-anchor="start" >move the data</text>
+<rect x="18" y="82" width="122" height="34" rx="17.0" fill="#000E38" stroke="#DDCAFF" stroke-width="1.8" ></rect><image x="28" y="88.0" width="22" height="22" href="../logos/postgresql.svg"><title></title></image><text x="58" y="104.04" font-size="14" fill="#FFFFFF" text-anchor="start" font-weight="600" >Postgres</text>
+<path d="M140,99 C170,99 160,152 166,152" fill="none" stroke="#1E2A54" stroke-width="2"/>
+<circle r="4.5" fill="#DDCAFF" opacity="0"><animateMotion dur="2.0s" begin="0.00s" repeatCount="indefinite" path="M140,99 C170,99 160,152 166,152"/><animate attributeName="opacity" dur="2.0s" begin="0.00s" repeatCount="indefinite" keyTimes="0;0.1;0.85;1" values="0;1;1;0"/></circle><circle r="4.5" fill="#DDCAFF" opacity="0"><animateMotion dur="2.0s" begin="1.00s" repeatCount="indefinite" path="M140,99 C170,99 160,152 166,152"/><animate attributeName="opacity" dur="2.0s" begin="1.00s" repeatCount="indefinite" keyTimes="0;0.1;0.85;1" values="0;1;1;0"/></circle>
+<rect x="18" y="134" width="122" height="34" rx="17.0" fill="#000E38" stroke="#DDCAFF" stroke-width="1.8" ></rect><text x="32" y="156.04" font-size="14" fill="#FFFFFF" text-anchor="start" font-weight="600" >REST APIs</text>
+<path d="M140,151 C170,151 160,152 166,152" fill="none" stroke="#1E2A54" stroke-width="2"/>
+<circle r="4.5" fill="#DDCAFF" opacity="0"><animateMotion dur="2.0s" begin="0.30s" repeatCount="indefinite" path="M140,151 C170,151 160,152 166,152"/><animate attributeName="opacity" dur="2.0s" begin="0.30s" repeatCount="indefinite" keyTimes="0;0.1;0.85;1" values="0;1;1;0"/></circle><circle r="4.5" fill="#DDCAFF" opacity="0"><animateMotion dur="2.0s" begin="1.30s" repeatCount="indefinite" path="M140,151 C170,151 160,152 166,152"/><animate attributeName="opacity" dur="2.0s" begin="1.30s" repeatCount="indefinite" keyTimes="0;0.1;0.85;1" values="0;1;1;0"/></circle>
+<rect x="18" y="186" width="122" height="34" rx="17.0" fill="#000E38" stroke="#DDCAFF" stroke-width="1.8" ></rect><text x="32" y="208.04" font-size="14" fill="#FFFFFF" text-anchor="start" font-weight="600" >CSV on S3</text>
+<path d="M140,203 C170,203 160,152 166,152" fill="none" stroke="#1E2A54" stroke-width="2"/>
+<circle r="4.5" fill="#DDCAFF" opacity="0"><animateMotion dur="2.0s" begin="0.60s" repeatCount="indefinite" path="M140,203 C170,203 160,152 166,152"/><animate attributeName="opacity" dur="2.0s" begin="0.60s" repeatCount="indefinite" keyTimes="0;0.1;0.85;1" values="0;1;1;0"/></circle><circle r="4.5" fill="#DDCAFF" opacity="0"><animateMotion dur="2.0s" begin="1.60s" repeatCount="indefinite" path="M140,203 C170,203 160,152 166,152"/><animate attributeName="opacity" dur="2.0s" begin="1.60s" repeatCount="indefinite" keyTimes="0;0.1;0.85;1" values="0;1;1;0"/></circle>
+<circle cx="196" cy="152" r="30" fill="#000E38" stroke="#8950FF" stroke-width="2"/>
+<image x="178" y="134" width="36" height="36" href="../logos/airbyte.svg"><title>Airbyte</title></image>
+<path d="M226,152 L262,152" fill="none" stroke="#1E2A54" stroke-width="2"/>
+<circle r="4.5" fill="#00E5A4" opacity="0"><animateMotion dur="1.2s" begin="0.00s" repeatCount="indefinite" path="M226,152 L262,152"/><animate attributeName="opacity" dur="1.2s" begin="0.00s" repeatCount="indefinite" keyTimes="0;0.1;0.85;1" values="0;1;1;0"/></circle><circle r="4.5" fill="#00E5A4" opacity="0"><animateMotion dur="1.2s" begin="0.40s" repeatCount="indefinite" path="M226,152 L262,152"/><animate attributeName="opacity" dur="1.2s" begin="0.40s" repeatCount="indefinite" keyTimes="0;0.1;0.85;1" values="0;1;1;0"/></circle><circle r="4.5" fill="#00E5A4" opacity="0"><animateMotion dur="1.2s" begin="0.80s" repeatCount="indefinite" path="M226,152 L262,152"/><animate attributeName="opacity" dur="1.2s" begin="0.80s" repeatCount="indefinite" keyTimes="0;0.1;0.85;1" values="0;1;1;0"/></circle>
+<rect x="262" y="118" width="112" height="68" rx="8" fill="#000E38" stroke="#00E5A4" stroke-width="2" ></rect>
+<text x="318" y="146" font-size="14" fill="#FFFFFF" text-anchor="middle" font-weight="600" >lake or</text>
+<text x="318" y="166" font-size="14" fill="#FFFFFF" text-anchor="middle" font-weight="600" >warehouse</text>
+<text x="18" y="262" font-size="15" fill="#00E5A4" text-anchor="start" font-weight="800" >_</text>
+<text x="34" y="262" font-size="15" fill="#FFFFFF" text-anchor="start" >600+ connectors, open source</text>
+<text x="18" y="284" font-size="15" fill="#00E5A4" text-anchor="start" font-weight="800" >_</text>
+<text x="34" y="284" font-size="15" fill="#FFFFFF" text-anchor="start" >incremental syncs and CDC</text>
+<text x="18" y="306" font-size="15" fill="#00E5A4" text-anchor="start" font-weight="800" >_</text>
+<text x="34" y="306" font-size="15" fill="#FFFFFF" text-anchor="start" >UI, API, Terraform or PyAirbyte</text>
+<rect x="410" y="0" width="390" height="330" rx="14" fill="#0a1440" stroke="#1E2A54" stroke-width="1.5" ></rect><rect x="426" y="0" width="358" height="5" rx="2.5" fill="#00E5A4" stroke="none" stroke-width="1.5" ></rect>
+<image x="428" y="20" width="30" height="30" href="../logos/trino.svg"><title>Trino</title></image>
+<text x="468" y="42" font-size="20" fill="#FFFFFF" text-anchor="start" font-weight="700" >Trino</text>
+<text x="533.5" y="42" font-size="15" fill="#8F9AB8" text-anchor="start" >query it where it lives</text>
+<rect x="428" y="60" width="354" height="48" rx="8" fill="#000E38" stroke="#1E2A54" stroke-width="1.5" ></rect>
+<text x="440" y="80" font-size="13" fill="#DDCAFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >SELECT … FROM postgres.crm.plants</text>
+<text x="440" y="98" font-size="13" fill="#DDCAFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >JOIN iceberg.lake.readings USING …</text>
+<line x1="605" y1="108" x2="605" y2="112" stroke="#1E2A54" stroke-width="2"/>
+<rect x="535" y="112" width="140" height="44" rx="8" fill="#000E38" stroke="#00E5A4" stroke-width="2" ></rect>
+<image x="545" y="121" width="26" height="26" href="../logos/trino.svg"><title>Trino</title></image>
+<text x="579" y="139" font-size="14" fill="#FFFFFF" text-anchor="start" font-weight="600" >coordinator</text>
+<path d="M605,156 C605,184 482,174 482,196" fill="none" stroke="#1E2A54" stroke-width="2"/>
+<circle r="4" fill="#DDCAFF" opacity="0"><animateMotion dur="2.4s" begin="0.00s" repeatCount="indefinite" path="M605,156 C605,184 482,174 482,196"/><animate attributeName="opacity" dur="2.4s" begin="0.00s" repeatCount="indefinite" keyTimes="0;0.1;0.85;1" values="0;1;1;0"/></circle>
+<circle r="4" fill="#00E5A4" opacity="0"><animateMotion dur="2.4s" begin="1.20s" repeatCount="indefinite" path="M482,196 C482,174 605,184 605,156"/><animate attributeName="opacity" dur="2.4s" begin="1.20s" repeatCount="indefinite" keyTimes="0;0.1;0.85;1" values="0;1;1;0"/></circle>
+<rect x="428" y="196" width="108" height="34" rx="17.0" fill="#000E38" stroke="#DDCAFF" stroke-width="1.8" ></rect><image x="438" y="202.0" width="22" height="22" href="../logos/postgresql.svg"><title></title></image><text x="468" y="218.04" font-size="14" fill="#FFFFFF" text-anchor="start" font-weight="600" >Postgres</text>
+<path d="M605,156 C605,184 604,174 604,196" fill="none" stroke="#1E2A54" stroke-width="2"/>
+<circle r="4" fill="#DDCAFF" opacity="0"><animateMotion dur="2.4s" begin="0.20s" repeatCount="indefinite" path="M605,156 C605,184 604,174 604,196"/><animate attributeName="opacity" dur="2.4s" begin="0.20s" repeatCount="indefinite" keyTimes="0;0.1;0.85;1" values="0;1;1;0"/></circle>
+<circle r="4" fill="#00E5A4" opacity="0"><animateMotion dur="2.4s" begin="1.40s" repeatCount="indefinite" path="M604,196 C604,174 605,184 605,156"/><animate attributeName="opacity" dur="2.4s" begin="1.40s" repeatCount="indefinite" keyTimes="0;0.1;0.85;1" values="0;1;1;0"/></circle>
+<rect x="550" y="196" width="108" height="34" rx="17.0" fill="#000E38" stroke="#DDCAFF" stroke-width="1.8" ></rect><image x="560" y="202.0" width="22" height="22" href="../logos/iceberg.svg"><title></title></image><text x="590" y="218.04" font-size="14" fill="#FFFFFF" text-anchor="start" font-weight="600" >Iceberg</text>
+<path d="M605,156 C605,184 726,174 726,196" fill="none" stroke="#1E2A54" stroke-width="2"/>
+<circle r="4" fill="#DDCAFF" opacity="0"><animateMotion dur="2.4s" begin="0.40s" repeatCount="indefinite" path="M605,156 C605,184 726,174 726,196"/><animate attributeName="opacity" dur="2.4s" begin="0.40s" repeatCount="indefinite" keyTimes="0;0.1;0.85;1" values="0;1;1;0"/></circle>
+<circle r="4" fill="#00E5A4" opacity="0"><animateMotion dur="2.4s" begin="1.60s" repeatCount="indefinite" path="M726,196 C726,174 605,184 605,156"/><animate attributeName="opacity" dur="2.4s" begin="1.60s" repeatCount="indefinite" keyTimes="0;0.1;0.85;1" values="0;1;1;0"/></circle>
+<rect x="672" y="196" width="108" height="34" rx="17.0" fill="#000E38" stroke="#DDCAFF" stroke-width="1.8" ></rect><text x="686" y="218.04" font-size="14" fill="#FFFFFF" text-anchor="start" font-weight="600" >Kafka</text>
+<text x="428" y="262" font-size="15" fill="#00E5A4" text-anchor="start" font-weight="800" >_</text>
+<text x="444" y="262" font-size="15" fill="#FFFFFF" text-anchor="start" >one SQL query across many sources</text>
+<text x="428" y="284" font-size="15" fill="#00E5A4" text-anchor="start" font-weight="800" >_</text>
+<text x="444" y="284" font-size="15" fill="#FFFFFF" text-anchor="start" >massively parallel: add workers to scale</text>
+<text x="428" y="306" font-size="15" fill="#00E5A4" text-anchor="start" font-weight="800" >_</text>
+<text x="444" y="306" font-size="15" fill="#FFFFFF" text-anchor="start" >the engine behind Amazon Athena</text>
+</svg>

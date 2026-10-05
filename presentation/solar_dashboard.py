@@ -24,6 +24,49 @@ def imports():
 
 
 @app.cell(hide_code=True)
+def data_gate(mo):
+    # The raw data isn't committed (data/ is git-ignored): it is generated
+    # by the synthetic-data simulator in solar_data_gen/, deterministically
+    # (same seed, same files). On a fresh checkout, offer to do that first.
+    from solar_data_gen import bronze
+
+    generate_button = mo.ui.run_button(label="Generate the data")
+    return bronze, generate_button
+
+
+@app.cell(hide_code=True)
+def ensure_data(bronze, generate_button, mo):
+    data_ready = bronze.is_ready()
+    if not data_ready and generate_button.value:
+        with mo.status.spinner(title="Generating the solar data..."):
+            bronze.generate()
+        data_ready = True
+    # Shown (in the dashboard's top row, where the filters go) until the data
+    # exists; empty afterwards. The cells below wait on `data_ready`.
+    first_run_notice = (
+        None
+        if data_ready
+        else mo.callout(
+            mo.hstack(
+                [
+                    mo.Html(
+                        "<span style='color:#1a1a1a'><b>The solar data isn't generated yet.</b> "
+                        "Simulate it (about 20 s, nothing is downloaded):</span>"
+                    ),
+                    generate_button,
+                ],
+                justify="start",
+                align="center",
+                gap=1.5,
+            ),
+            kind="warn",
+        )
+    )
+    first_run_notice
+    return (data_ready,)
+
+
+@app.cell(hide_code=True)
 def branding(alt, nf):
     # Nearform brand tokens, imported from the shared presentation/template
     # package (presentation/template/theme.py) so this dashboard stays in
@@ -211,15 +254,17 @@ def grid_layout(FONT_MD, NF_FG, NF_PANEL, NF_RULE, alt):
 
 
 @app.cell(hide_code=True)
-def load_data(Path, pd):
+def load_data(Path, bronze, data_ready, mo, pd):
+    mo.stop(not data_ready)
     # The raw ("bronze") data, one file per source system, as it would land
-    # in a platform: produced by the SolarDataPlatform project's
-    # `solar-data-gen` generator (8 synthetic plants over two years) and
-    # split per source by scripts/export_solar_bronze.py - see
-    # data/solar/README.md for how to regenerate it.
-    BRONZE = Path(__file__).resolve().parent.parent / "data" / "solar" / "bronze"
+    # in a platform: simulated by solar_data_gen/ (8 synthetic plants over
+    # two years) and split per source - see data/solar/README.md. `data_ready`
+    # makes this wait for the first-run "Generate the data" step.
+    BRONZE = bronze.BRONZE_DIR
 
     plants = pd.read_csv(BRONZE / "plants.csv", parse_dates=["commissioning_date", "decommissioning_date"])
+    # which plant each sensor belongs to - the readings only name the sensor
+    sensors = pd.read_csv(BRONZE / "sensors.csv", parse_dates=["install_date"])
     sensor_readings = pd.read_csv(BRONZE / "sensor_readings.csv.gz", parse_dates=["timestamp"])
     grid_settlement = pd.read_csv(BRONZE / "grid_settlement.csv", parse_dates=["settlement_date"])
     costs_raw = pd.read_csv(BRONZE / "costs.csv", parse_dates=["cost_date"])
@@ -235,6 +280,7 @@ def load_data(Path, pd):
         maintenance_raw,
         plants,
         sensor_readings,
+        sensors,
     )
 
 
@@ -244,40 +290,66 @@ def bronze_to_gold(
     costs_raw,
     grid_settlement,
     maintenance_raw,
+    pd,
     plants,
     sensor_readings,
+    sensors,
 ):
     # Bronze -> gold in one step: the SCADA sensor readings and the grid
     # operator's settlement are separate sources that only meet here, in
     # `gold` - one row per plant per day, everything the dashboard needs.
 
-    # 1. Clean the sensor readings. A dropout arrives as NaN; a *stuck*
+    # 1. Find the bad sensor readings. A dropout arrives as NaN; a *stuck*
     #    sensor keeps repeating the value it froze on, which real output
     #    never does (there's always some noise) - so the same non-zero
-    #    reading 3+ hours in a row is treated as missing too.
-    readings = sensor_readings.sort_values(["sensor_id", "timestamp"]).copy()
+    #    reading 3+ hours in a row is treated as missing too. What's found
+    #    goes into its own table, `reading_issues` (one row per bad
+    #    reading), rather than a column on the readings: the readings stay
+    #    measurements, and the issues can be counted and joined on their own.
+    readings = sensor_readings.sort_values(["sensor_id", "timestamp"]).reset_index(drop=True)
     _power = readings["ac_power_kw"]
     _run = (_power != readings.groupby("sensor_id")["ac_power_kw"].shift()).cumsum()
     _run_length = readings.groupby(_run)["ac_power_kw"].transform("size")
-    readings["issue"] = "ok"
-    readings.loc[(_run_length >= 3) & (_power > 0), "issue"] = "stuck"
-    readings.loc[_power.isna(), "issue"] = "missing"
-    readings["ac_power_kw_clean"] = _power.where(readings["issue"] == "ok")
+    _stuck = (_run_length >= 3) & (_power > 0)
+    _missing = _power.isna()
+    reading_issues = (
+        pd.concat(
+            [
+                readings.loc[_stuck, ["sensor_id", "timestamp"]].assign(issue="stuck"),
+                readings.loc[_missing, ["sensor_id", "timestamp"]].assign(issue="missing"),
+            ]
+        )
+        .sort_values(["sensor_id", "timestamp"])
+        .reset_index(drop=True)
+    )
+    _bad = _stuck | _missing
+    readings["ac_power_kw_clean"] = _power.mask(_bad)
 
-    # 2. Fill each bad hour with the same hour the day before (24 readings
-    #    back): solar output follows the sun, so yesterday's profile is a
-    #    fair estimate - better than a straight line across a whole night.
-    #    Where yesterday's reading is bad too, the hour stays missing (and
-    #    shows up in `reading_coverage`).
-    readings["ac_power_kw_clean"] = readings.groupby("sensor_id")["ac_power_kw_clean"].transform(
-        lambda s: s.fillna(s.shift(24))
+    # 2. Fill each bad hour with the typical value for that hour of the day
+    #    around it: the median of the same hour over the surrounding week
+    #    (7 days, centred). Solar output follows the sun, so this keeps the
+    #    daily bell shape and leaves nights at 0 - and unlike "yesterday's
+    #    value" it still has an answer when yesterday was broken too (a
+    #    stuck run can last more than a day).
+    _same_hour = readings.groupby(["sensor_id", readings["timestamp"].dt.hour])["ac_power_kw_clean"]
+    readings["ac_power_kw_clean"] = readings["ac_power_kw_clean"].fillna(
+        _same_hour.transform(lambda s: s.rolling(7, center=True, min_periods=1).median())
     )
 
-    # 3. Hourly kW -> daily kWh per plant (one reading = one hour).
-    readings["date"] = readings["timestamp"].dt.tz_localize(None).dt.normalize()
-    daily = readings.groupby(["plant_id", "date"], as_index=False).agg(
-        energy_generated_kwh=("ac_power_kw_clean", "sum"),
-        reading_coverage=("ac_power_kw_clean", lambda s: s.notna().mean()),
+    # 3. Hourly kW -> daily kWh per plant (one reading = one hour). The
+    #    sensor register says which plant each sensor is in.
+    daily = (
+        readings.assign(
+            date=readings["timestamp"].dt.tz_localize(None).dt.normalize(),
+            measured=~_bad,
+        )
+        .merge(sensors[["sensor_id", "plant_id"]], on="sensor_id")
+        .groupby(["plant_id", "date"], as_index=False)
+        .agg(
+            energy_generated_kwh=("ac_power_kw_clean", "sum"),
+            # share of hours that were really measured, not filled in
+            reading_coverage=("measured", "mean"),
+        )
     )
 
     # 4. Join the settlement (what the grid operator metered and paid) and
@@ -305,7 +377,7 @@ def bronze_to_gold(
     #: country filter would just duplicate the Plants one.
     REGIONS = {"GB": "EMEA", "NL": "EMEA", "DE": "EMEA", "RU": "EMEA", "CA": "Americas", "US": "Americas", "BR": "Americas", "MM": "APAC"}
     plant_region = dict(zip(plants["name"], plants["country_code"].map(REGIONS).fillna("Other")))
-    return alarms, costs, gold, maintenance, plant_region, readings
+    return alarms, costs, gold, maintenance, plant_region, reading_issues, readings
 
 
 @app.cell(hide_code=True)
@@ -1075,9 +1147,15 @@ def sankey_helper(FONT_SM, NF_FG, alt, pd):
         else:
             _in_scope = f"datum.scope == '{ALL}'"
 
+        def _inline(df):
+            """Embed the frame in the spec as plain JSON rows. The default
+            transport (an Arrow file, when pyarrow is installed) turned the
+            string columns - labels, colour keys - into `null` in the browser."""
+            return alt.InlineData(values=df.astype(object).where(df.notna(), None).to_dict("records"))
+
         def ribbons(df, opacity):
             chart = (
-                alt.Chart(df)
+                alt.Chart(_inline(df))
                 .transform_filter(_in_scope)
                 .mark_area(interpolate="linear")
                 .encode(
@@ -1093,7 +1171,7 @@ def sankey_helper(FONT_SM, NF_FG, alt, pd):
 
         def nodes(df, opacity):
             return (
-                alt.Chart(df)
+                alt.Chart(_inline(df))
                 .transform_filter(_in_scope)
                 .mark_rect()
                 .encode(
@@ -1120,11 +1198,11 @@ def sankey_helper(FONT_SM, NF_FG, alt, pd):
 
         _label = {"baseline": "middle", "color": NF_FG, "fontSize": FONT_SM - 1, "lineBreak": "\n"}
         layers += [
-            alt.Chart(node_df[node_df["column"] == 0])
+            alt.Chart(_inline(node_df[node_df["column"] == 0]))
             .transform_filter(_in_scope)
             .mark_text(align="right", dx=-5, **_label)
             .encode(x=alt.X("x0:Q", **_px), y=alt.Y("mid:Q", **_px), text="text:N"),
-            alt.Chart(node_df[node_df["column"] > 0])
+            alt.Chart(_inline(node_df[node_df["column"] > 0]))
             .transform_filter(_in_scope)
             .mark_text(align="left", dx=5, **_label)
             .encode(x=alt.X("x1:Q", **_px), y=alt.Y("mid:Q", **_px), text="text:N"),

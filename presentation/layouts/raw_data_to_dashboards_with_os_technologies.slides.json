@@ -1,0 +1,254 @@
+{
+  "type": "slides",
+  "data": {
+    "cells": [
+      {
+        "type": "skip"
+      },
+      {
+        "type": "skip"
+      },
+      {
+        "type": "skip"
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Open cold. Name the talk, not yourself."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "30 seconds. Then move."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "The roadmap - what this talk actually answers."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "The big question. Let it land, then move."
+      },
+      {
+        "type": "skip"
+      },
+      {
+        "type": "skip"
+      },
+      {
+        "type": "skip"
+      },
+      {
+        "type": "skip"
+      },
+      {
+        "type": "skip"
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Live demo - the actual dashboard, embedded live from solar_dashboard.py. If it breaks, keep talking and fall back to describing it."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "The map for the next few slides: CSVs in, pandas shapes them, Altair draws them, marimo makes it interactive and turns it into these slides. Then we go through each step in code."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Ingestion: one tab per source system - click through them; the code underneath changes with the tab. The readings only name their sensor; the sensors tab says which plant each one is in."
+      },
+      {
+        "type": "fragment",
+        "speakerNotes": "Click: the data model. Readings only name their sensor; the sensor register maps sensor to plant; settlement is per plant and day. Two tables are derived: reading_issues (what cleaning finds - kept out of the readings themselves) and gold."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Raw sensors lie: a stuck value repeats, a dropout is NaN. Point at the shaded hours; the mint line is what we put there - the typical value for that hour over the nearby days."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Gold: hourly readings become daily energy, joined to what the grid operator paid - and self-consumption falls out as the difference."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Plotting, step 1: the simplest possible Altair chart - x, y, colour."
+      },
+      {
+        "type": "sub-slide",
+        "speakerNotes": "Step 2: lines become stacked areas."
+      },
+      {
+        "type": "sub-slide",
+        "speakerNotes": "Step 3: titles, outline, smooth curves, readable numbers."
+      },
+      {
+        "type": "sub-slide",
+        "speakerNotes": "Step 4: tooltips - hover the chart."
+      },
+      {
+        "type": "sub-slide",
+        "speakerNotes": "Step 5: grid, quarterly ticks, and filling gaps with zero. This is the dashboard's chart."
+      },
+      {
+        "type": "skip"
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Filters, step 1: a slider is one line. Move it - the text below updates."
+      },
+      {
+        "type": "sub-slide",
+        "speakerNotes": "Step 2: a multiselect, everything selected to start."
+      },
+      {
+        "type": "sub-slide",
+        "speakerNotes": "Step 3: the date range - the exact widget used in the dashboard."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Cross-filtering, step 1: one selection object. Click a band; double-click to clear."
+      },
+      {
+        "type": "sub-slide",
+        "speakerNotes": "Step 2: the same selection in a second chart - click either chart and both react."
+      },
+      {},
+      {
+        "type": "slide",
+        "speakerNotes": "Four services really, dressed up nine ways."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Click through a tab or two live."
+      },
+      {},
+      {
+        "type": "slide",
+        "speakerNotes": "Same six readings, two layouts. Watch the race: the row layout has to read every value to average one column; the columnar one jumps straight to kW and is done in a quarter of the time. Click the diagram to replay."
+      },
+      {
+        "type": "sub-slide",
+        "speakerNotes": "Inside the file: row groups, one chunk per column, and a footer with min/max for every chunk. The reader reads the footer first, skips three of four row groups, reads one chunk out of sixteen."
+      },
+      {
+        "type": "sub-slide",
+        "speakerNotes": "Dictionary, then run-length, then a codec on top. The numbers underneath are measured live on the sensor readings from the dashboard - written to Parquet in memory just now."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "The 'aha' slide - transactions on top of plain files. Five scenes: insert, insert, update (new file + remove, nothing edited), a crashed writer (no commit = nothing happened), time travel. Concurrency: two writers race to create the same next JSON file; only one wins, the other retries."
+      },
+      {
+        "type": "sub-slide",
+        "speakerNotes": "Iceberg gets the same guarantees with a tree: catalog -> metadata -> snapshot -> manifests -> files. The commit is one atomic pointer swap in the catalog. Born at Netflix."
+      },
+      {
+        "type": "sub-slide",
+        "speakerNotes": "Delta Lake from Databricks, Iceberg from Netflix - both open specs now, and converging (UniForm; Databricks bought Tabular, the Iceberg founders' company). Mention schema evolution if there's time."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Closes the loop back to the platform comparison: the managed platforms store your data in exactly these open formats."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Two philosophies. Airbyte copies data in - hundreds of open-source connectors, incremental syncs. Trino doesn't copy at all: one SQL query, pushed down to each source. Trino is also what Amazon Athena runs on."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Back to 'I need to refresh the data daily'. The dashboard's own pipeline as a DAG: extracts in parallel, clean fails on a timeout and is retried automatically, the dashboard refreshes. Click to replay."
+      },
+      {
+        "type": "sub-slide",
+        "speakerNotes": "Airflow is the safe choice: everybody knows it, every cloud sells it managed. The DAG is Python, the UI shows every task of every run."
+      },
+      {
+        "type": "sub-slide",
+        "speakerNotes": "Prefect is the fun one: your existing functions plus two decorators, and it runs as a normal script until you want a schedule."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Spark for scale - when the data no longer fits one machine. dbt for SQL people - every model a SELECT, ref() builds the DAG, tests and docs come with it."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Three shapes: a server for the app (Postgres), a library inside your process (DuckDB), a columnar server for real-time analytics (ClickHouse)."
+      },
+      {
+        "type": "sub-slide",
+        "speakerNotes": "Postgres: the default. Most used database in the Stack Overflow survey three years running; extensions make it a geo, vector or time-series database. Show https://db-engines.com/en/ranking if there's time. But it's a row store - remember the Parquet race."
+      },
+      {
+        "type": "skip"
+      },
+      {
+        "type": "sub-slide",
+        "speakerNotes": "Live: edit the SQL - it runs inside this notebook's Python process, straight on the raw gzipped CSV. Then try SELECT * FROM gold: the dashboard's DataFrame is a table too."
+      },
+      {
+        "type": "sub-slide",
+        "speakerNotes": "ClickHouse when many users need sub-second dashboards on billions of rows, as data keeps arriving. MergeTree: cheap inserts as small parts, background merges."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "The ecosystem as a spectrum: BI apps where you click, dashboards-as-code frameworks, chart libraries, and the new browser-native engines. Left is faster to start, right gives full control."
+      },
+      {
+        "type": "sub-slide",
+        "speakerNotes": "One example from each project's own gallery - just to show the range. Everything here is free and open source."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Be fair to Power BI: for business self-service, the semantic model and the Microsoft 365 integration it is genuinely hard to beat, and someone else runs it. Open source wins on cost at scale, visual freedom, version control and embedding. Pro is $14/user/month since April 2025; free viewers need F64 capacity."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Superset for data teams - Maxime Beauchemin started it at Airbnb, the same person who started Airflow. Metabase for business users: the easiest thing on this list to get running."
+      },
+      {
+        "type": "skip"
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Press play: a D3 bar chart race over the same gold table as the dashboard. Hover a bar, click one to highlight it. You can't build this in a BI tool. It used to cost days of D3; with a coding assistant it is minutes - this one was written with one."
+      },
+      {
+        "type": "sub-slide",
+        "speakerNotes": "The real draw() function - D3's data join plus a transition. Skip if short on time."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Top: every click is a round trip. Bottom: the engine is compiled to WebAssembly and downloaded once with the data; after that every interaction is local. Perspective, DuckDB-WASM, even Python itself via Pyodide - marimo can export this whole deck to run in the browser."
+      },
+      {
+        "type": "skip"
+      },
+      {
+        "type": "sub-slide",
+        "speakerNotes": "Live: 225k sensor readings pivoted in the browser by Perspective's WASM engine. Open the settings panel, switch to a datagrid, group by sensor, filter a plant - Python is not involved any more."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "The honest trade-off. Open source: no licences, no lock-in, full flexibility, runs anywhere - but you are the integrator and the on-call. Managed: one-stop shop, SLAs, governance built in - but consumption pricing and lock-in."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Tendencies, not rules. Small teams with small data: keep it simple. Engineering-heavy orgs: open-source stack. Large orgs without a platform team: managed. Big tech: hybrid or build - most of the tools in this talk were born there (Airflow and Superset at Airbnb, Iceberg at Netflix, Presto/Trino at Facebook). 42% of developers work at companies under 100 people."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Costs: the curve is illustrative - managed has no set-up cost but grows with usage; open source front-loads people. Real anchors: F64 ~$8.4k/month, Pro $14/user, a big VM ~$590/month. Performance: measured live just now - 22.5M rows on this laptop. Most data is small (Tigani, Big Data is Dead): one machine is enough far more often than we think."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Back to the four questions from the start."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Thank you - questions."
+      },
+      {}
+    ],
+    "deck": {
+      "transition": "none",
+      "verticalAlign": "top"
+    }
+  }
+}

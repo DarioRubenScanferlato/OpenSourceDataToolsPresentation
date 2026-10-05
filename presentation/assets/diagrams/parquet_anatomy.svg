@@ -1,0 +1,86 @@
+<!--
+Parquet, part 2: inside the file. Rows are cut into row groups, each row group
+stores one chunk per column, and the footer keeps min/max statistics for every
+chunk. A filtered query reads the footer first, skips the row groups whose
+range can't match, and then reads only the column chunks it needs.
+Inlined by template.assets.svg(); click the diagram to replay.
+-->
+<svg id="pq-anat" viewBox="0 0 800 340" width="100%" xmlns="http://www.w3.org/2000/svg" style="display:block; font-family:inherit; cursor:pointer;">
+<rect x="418" y="0" width="382" height="36" rx="18" fill="#000E38" stroke="#00E5A4" stroke-width="1.5" ></rect>
+<text x="609" y="24" font-size="15" fill="#FFFFFF" text-anchor="middle" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >SELECT avg(kW) WHERE ts &gt;= '2026-06'</text>
+<text x="0" y="26" font-size="17" fill="#FFFFFF" text-anchor="start" font-weight="700" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >readings.parquet</text>
+<rect x="0" y="40" width="392" height="292" rx="12" fill="#0a1440" stroke="#1E2A54" stroke-width="1.5" ></rect>
+<g><animate attributeName="opacity" dur="11.0s" begin="0s;pq-anat.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.3545;0.3818;0.9636;1.0000" values="1;1;0.25;0.25;1" />
+<text x="14" y="74" font-size="15" fill="#FFFFFF" text-anchor="start" font-weight="600" >row group 1</text>
+<text x="14" y="92" font-size="12" fill="#8F9AB8" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >2024-09 →</text>
+<rect x="128" y="58" width="84" height="36" rx="4" fill="#DDCAFF" stroke="none" stroke-width="1.5" opacity="0.55"></rect>
+<line x1="156.0" y1="58" x2="156.0" y2="94" stroke="#0a1440" stroke-width="2"/>
+<line x1="184.0" y1="58" x2="184.0" y2="94" stroke="#0a1440" stroke-width="2"/>
+<rect x="216" y="58" width="84" height="36" rx="4" fill="#8950FF" stroke="none" stroke-width="1.5" opacity="0.55"></rect>
+<line x1="244.0" y1="58" x2="244.0" y2="94" stroke="#0a1440" stroke-width="2"/>
+<line x1="272.0" y1="58" x2="272.0" y2="94" stroke="#0a1440" stroke-width="2"/>
+<rect x="304" y="58" width="84" height="36" rx="4" fill="#00E5A4" stroke="none" stroke-width="1.5" opacity="0.55"></rect>
+<line x1="332.0" y1="58" x2="332.0" y2="94" stroke="#0a1440" stroke-width="2"/>
+<line x1="360.0" y1="58" x2="360.0" y2="94" stroke="#0a1440" stroke-width="2"/>
+</g>
+<g><animate attributeName="opacity" dur="11.0s" begin="0s;pq-anat.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.3545;0.3818;0.9636;1.0000" values="1;1;0.25;0.25;1" />
+<text x="14" y="128" font-size="15" fill="#FFFFFF" text-anchor="start" font-weight="600" >row group 2</text>
+<text x="14" y="146" font-size="12" fill="#8F9AB8" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >2025-03 →</text>
+<rect x="128" y="112" width="84" height="36" rx="4" fill="#DDCAFF" stroke="none" stroke-width="1.5" opacity="0.55"></rect>
+<line x1="156.0" y1="112" x2="156.0" y2="148" stroke="#0a1440" stroke-width="2"/>
+<line x1="184.0" y1="112" x2="184.0" y2="148" stroke="#0a1440" stroke-width="2"/>
+<rect x="216" y="112" width="84" height="36" rx="4" fill="#8950FF" stroke="none" stroke-width="1.5" opacity="0.55"></rect>
+<line x1="244.0" y1="112" x2="244.0" y2="148" stroke="#0a1440" stroke-width="2"/>
+<line x1="272.0" y1="112" x2="272.0" y2="148" stroke="#0a1440" stroke-width="2"/>
+<rect x="304" y="112" width="84" height="36" rx="4" fill="#00E5A4" stroke="none" stroke-width="1.5" opacity="0.55"></rect>
+<line x1="332.0" y1="112" x2="332.0" y2="148" stroke="#0a1440" stroke-width="2"/>
+<line x1="360.0" y1="112" x2="360.0" y2="148" stroke="#0a1440" stroke-width="2"/>
+</g>
+<g><animate attributeName="opacity" dur="11.0s" begin="0s;pq-anat.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.3545;0.3818;0.9636;1.0000" values="1;1;0.25;0.25;1" />
+<text x="14" y="182" font-size="15" fill="#FFFFFF" text-anchor="start" font-weight="600" >row group 3</text>
+<text x="14" y="200" font-size="12" fill="#8F9AB8" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >2025-09 →</text>
+<rect x="128" y="166" width="84" height="36" rx="4" fill="#DDCAFF" stroke="none" stroke-width="1.5" opacity="0.55"></rect>
+<line x1="156.0" y1="166" x2="156.0" y2="202" stroke="#0a1440" stroke-width="2"/>
+<line x1="184.0" y1="166" x2="184.0" y2="202" stroke="#0a1440" stroke-width="2"/>
+<rect x="216" y="166" width="84" height="36" rx="4" fill="#8950FF" stroke="none" stroke-width="1.5" opacity="0.55"></rect>
+<line x1="244.0" y1="166" x2="244.0" y2="202" stroke="#0a1440" stroke-width="2"/>
+<line x1="272.0" y1="166" x2="272.0" y2="202" stroke="#0a1440" stroke-width="2"/>
+<rect x="304" y="166" width="84" height="36" rx="4" fill="#00E5A4" stroke="none" stroke-width="1.5" opacity="0.55"></rect>
+<line x1="332.0" y1="166" x2="332.0" y2="202" stroke="#0a1440" stroke-width="2"/>
+<line x1="360.0" y1="166" x2="360.0" y2="202" stroke="#0a1440" stroke-width="2"/>
+</g>
+<g><animate attributeName="opacity" dur="11.0s" begin="0s;pq-anat.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.3545;0.3818;0.9636;1.0000" values="1;1;1;1;1" />
+<text x="14" y="236" font-size="15" fill="#FFFFFF" text-anchor="start" font-weight="600" >row group 4</text>
+<text x="14" y="254" font-size="12" fill="#8F9AB8" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >2026-03 →</text>
+<rect x="128" y="220" width="84" height="36" rx="4" fill="#DDCAFF" stroke="none" stroke-width="1.5" opacity="0.55"></rect>
+<line x1="156.0" y1="220" x2="156.0" y2="256" stroke="#0a1440" stroke-width="2"/>
+<line x1="184.0" y1="220" x2="184.0" y2="256" stroke="#0a1440" stroke-width="2"/>
+<rect x="216" y="220" width="84" height="36" rx="4" fill="#8950FF" stroke="none" stroke-width="1.5" opacity="0.55"></rect>
+<line x1="244.0" y1="220" x2="244.0" y2="256" stroke="#0a1440" stroke-width="2"/>
+<line x1="272.0" y1="220" x2="272.0" y2="256" stroke="#0a1440" stroke-width="2"/>
+<rect x="304" y="220" width="84" height="36" rx="4" fill="#00E5A4" stroke="none" stroke-width="1.5" opacity="0.55"></rect>
+<line x1="332.0" y1="220" x2="332.0" y2="256" stroke="#0a1440" stroke-width="2"/>
+<line x1="360.0" y1="220" x2="360.0" y2="256" stroke="#0a1440" stroke-width="2"/>
+</g>
+<rect x="300" y="216" width="92" height="44" rx="6" fill="none" stroke="#FFFFFF" stroke-width="3" opacity="0"><animate attributeName="opacity" dur="11.0s" begin="0s;pq-anat.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.4455;0.4773;0.9636;0.9955;1.0000" values="0;0;1;1;0;0" /></rect>
+<rect x="304" y="220" width="84" height="36" rx="4" fill="#00E5A4" opacity="0"><animate attributeName="opacity" dur="11.0s" begin="0s;pq-anat.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.4455;0.4773;0.9636;0.9955;1.0000" values="0;0;1;1;0;0" /></rect>
+<g><rect x="10" y="272" width="372" height="54" rx="8" fill="#000E38" stroke="#8950FF" stroke-width="2" ></rect><text x="24" y="294" font-size="15" fill="#FFFFFF" text-anchor="start" font-weight="700" >footer</text><text x="24" y="314" font-size="13" fill="#8F9AB8" text-anchor="start" >schema · min/max of every chunk</text></g>
+<rect x="8" y="270" width="376" height="58" rx="9" fill="none" stroke="#00E5A4" stroke-width="3" opacity="0"><animate attributeName="opacity" dur="11.0s" begin="0s;pq-anat.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.0545;0.0864;0.2182;0.2500;1.0000" values="0;0;1;1;0;0" /></rect>
+<g opacity="0"><animate attributeName="opacity" dur="11.0s" begin="0s;pq-anat.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.1455;0.1773;0.9636;0.9955;1.0000" values="0;0;1;1;0;0" /><rect x="418" y="60" width="236" height="32" rx="6" fill="#000E38" stroke="#1E2A54" stroke-width="1.5" ></rect><text x="430" y="81" font-size="14" fill="#DDCAFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >ts  2024-09 … 2025-02</text></g>
+<g opacity="0"><animate attributeName="opacity" dur="11.0s" begin="0s;pq-anat.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.3545;0.3864;0.9636;0.9955;1.0000" values="0;0;1;1;0;0" /><text x="670" y="82" font-size="16" fill="#8F9AB8" text-anchor="start" font-weight="700" >✗ skip</text></g>
+<path d="M412,76 h-12" stroke="#1E2A54" stroke-width="1.5"/>
+<g opacity="0"><animate attributeName="opacity" dur="11.0s" begin="0s;pq-anat.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.1773;0.2091;0.9636;0.9955;1.0000" values="0;0;1;1;0;0" /><rect x="418" y="114" width="236" height="32" rx="6" fill="#000E38" stroke="#1E2A54" stroke-width="1.5" ></rect><text x="430" y="135" font-size="14" fill="#DDCAFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >ts  2025-03 … 2025-08</text></g>
+<g opacity="0"><animate attributeName="opacity" dur="11.0s" begin="0s;pq-anat.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.3545;0.3864;0.9636;0.9955;1.0000" values="0;0;1;1;0;0" /><text x="670" y="136" font-size="16" fill="#8F9AB8" text-anchor="start" font-weight="700" >✗ skip</text></g>
+<path d="M412,130 h-12" stroke="#1E2A54" stroke-width="1.5"/>
+<g opacity="0"><animate attributeName="opacity" dur="11.0s" begin="0s;pq-anat.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.2091;0.2409;0.9636;0.9955;1.0000" values="0;0;1;1;0;0" /><rect x="418" y="168" width="236" height="32" rx="6" fill="#000E38" stroke="#1E2A54" stroke-width="1.5" ></rect><text x="430" y="189" font-size="14" fill="#DDCAFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >ts  2025-09 … 2026-02</text></g>
+<g opacity="0"><animate attributeName="opacity" dur="11.0s" begin="0s;pq-anat.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.3545;0.3864;0.9636;0.9955;1.0000" values="0;0;1;1;0;0" /><text x="670" y="190" font-size="16" fill="#8F9AB8" text-anchor="start" font-weight="700" >✗ skip</text></g>
+<path d="M412,184 h-12" stroke="#1E2A54" stroke-width="1.5"/>
+<g opacity="0"><animate attributeName="opacity" dur="11.0s" begin="0s;pq-anat.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.2409;0.2727;0.9636;0.9955;1.0000" values="0;0;1;1;0;0" /><rect x="418" y="222" width="236" height="32" rx="6" fill="#000E38" stroke="#1E2A54" stroke-width="1.5" ></rect><text x="430" y="243" font-size="14" fill="#DDCAFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >ts  2026-03 … 2026-09</text></g>
+<g opacity="0"><animate attributeName="opacity" dur="11.0s" begin="0s;pq-anat.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.3545;0.3864;0.9636;0.9955;1.0000" values="0;0;1;1;0;0" /><text x="670" y="244" font-size="16" fill="#00E5A4" text-anchor="start" font-weight="700" >✓ read</text></g>
+<path d="M412,238 h-12" stroke="#1E2A54" stroke-width="1.5"/>
+<g opacity="0.35"><animate attributeName="opacity" dur="11.0s" begin="0s;pq-anat.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.0545;0.0727;0.2182;0.2364;1.0000" values="0.35;0.35;1;1;0.35;0.35" /><text x="418" y="288" font-size="15" fill="#00E5A4" text-anchor="start" font-weight="800" >1</text><text x="436" y="288" font-size="15" fill="#FFFFFF" text-anchor="start" >read the footer first</text></g>
+<g opacity="0.35"><animate attributeName="opacity" dur="11.0s" begin="0s;pq-anat.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.2182;0.2364;0.4364;0.4545;1.0000" values="0.35;0.35;1;1;0.35;0.35" /><text x="418" y="312" font-size="15" fill="#00E5A4" text-anchor="start" font-weight="800" >2</text><text x="436" y="312" font-size="15" fill="#FFFFFF" text-anchor="start" >skip row groups whose range can't match</text></g>
+<g opacity="0.35"><animate attributeName="opacity" dur="11.0s" begin="0s;pq-anat.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.4364;0.4545;0.9636;0.9818;1.0000" values="0.35;0.35;1;1;0.35;0.35" /><text x="418" y="336" font-size="15" fill="#00E5A4" text-anchor="start" font-weight="800" >3</text><text x="436" y="336" font-size="15" fill="#FFFFFF" text-anchor="start" >read only the kW chunk that's left</text></g>
+<g opacity="0"><animate attributeName="opacity" dur="11.0s" begin="0s;pq-anat.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.5273;0.5591;0.9636;0.9955;1.0000" values="0;0;1;1;0;0" /><text x="670" y="264" font-size="14" fill="#FFFFFF" text-anchor="start" font-weight="700" >1 of 12 chunks</text></g>
+<text x="794" y="334" text-anchor="end" font-size="11" fill="#8F9AB8" opacity="0.5">click to replay</text>
+</svg>

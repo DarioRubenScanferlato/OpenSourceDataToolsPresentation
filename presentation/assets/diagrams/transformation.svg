@@ -1,0 +1,76 @@
+<!--
+Two ways to transform data at scale. Spark: the driver turns one DataFrame
+expression into tasks, one per partition, and executors on many machines run
+them in parallel. dbt: every model is a SELECT; ref() between models is what
+builds the dependency graph, and tests run as each model is built (dbt sends
+the SQL to your warehouse - DuckDB, Postgres, Spark, Snowflake...).
+Inlined by template.assets.svg(); click the diagram to replay the dbt build.
+-->
+<svg id="transform" viewBox="0 0 800 330" width="100%" xmlns="http://www.w3.org/2000/svg" style="display:block; font-family:inherit; cursor:pointer;">
+<rect x="0" y="0" width="390" height="330" rx="14" fill="#0a1440" stroke="#1E2A54" stroke-width="1.5" ></rect><rect x="16" y="0" width="358" height="5" rx="2.5" fill="#E25A1C" stroke="none" stroke-width="1.5" ></rect>
+<image x="18" y="20" width="30" height="30" href="../logos/spark.svg"><title>Apache Spark</title></image>
+<text x="58" y="42" font-size="20" fill="#FFFFFF" text-anchor="start" font-weight="700" >Apache Spark</text>
+<text x="204.0" y="42" font-size="15" fill="#8F9AB8" text-anchor="start" >distributed compute</text>
+<rect x="18" y="62" width="354" height="46" rx="8" fill="#000E38" stroke="#1E2A54" stroke-width="1.5" ></rect>
+<text x="30" y="81" font-size="12" fill="#8F9AB8" text-anchor="start" font-weight="700" >driver</text>
+<text x="30" y="99" font-size="12.5" fill="#DDCAFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >readings.groupBy("plant_id").sum("kwh")</text>
+<path d="M195,108 C195,122 72,118 72,134" fill="none" stroke="#1E2A54" stroke-width="2"/>
+<circle r="3.5" fill="#DDCAFF" opacity="0"><animateMotion dur="1.6s" begin="0.00s" repeatCount="indefinite" path="M195,108 C195,122 72,118 72,134"/><animate attributeName="opacity" dur="1.6s" begin="0.00s" repeatCount="indefinite" keyTimes="0;0.1;0.85;1" values="0;1;1;0"/></circle>
+<rect x="18" y="134" width="108" height="92" rx="8" fill="#000E38" stroke="#E25A1C" stroke-width="1.8" ></rect>
+<text x="72" y="154" font-size="13" fill="#FFFFFF" text-anchor="middle" font-weight="600" >executor 1</text>
+<rect x="28" y="166" width="88" height="16" rx="4" fill="#0a1440" stroke="#1E2A54" stroke-width="1" ></rect>
+<rect x="28" y="166" width="0" height="16" rx="4" fill="#00E5A4" opacity="0.85"><animate attributeName="width" dur="2.20s" repeatCount="indefinite" keyTimes="0;0.75;1" values="0;88;88"/></rect>
+<text x="72" y="178.5" font-size="11" fill="#FFFFFF" text-anchor="middle" font-weight="700" stroke="#000E38" stroke-width="3" paint-order="stroke">partition 1</text>
+<rect x="28" y="192" width="88" height="16" rx="4" fill="#0a1440" stroke="#1E2A54" stroke-width="1" ></rect>
+<rect x="28" y="192" width="0" height="16" rx="4" fill="#00E5A4" opacity="0.85"><animate attributeName="width" dur="2.55s" repeatCount="indefinite" keyTimes="0;0.75;1" values="0;88;88"/></rect>
+<text x="72" y="204.5" font-size="11" fill="#FFFFFF" text-anchor="middle" font-weight="700" stroke="#000E38" stroke-width="3" paint-order="stroke">partition 2</text>
+<path d="M195,108 C195,122 194,118 194,134" fill="none" stroke="#1E2A54" stroke-width="2"/>
+<circle r="3.5" fill="#DDCAFF" opacity="0"><animateMotion dur="1.6s" begin="0.25s" repeatCount="indefinite" path="M195,108 C195,122 194,118 194,134"/><animate attributeName="opacity" dur="1.6s" begin="0.25s" repeatCount="indefinite" keyTimes="0;0.1;0.85;1" values="0;1;1;0"/></circle>
+<rect x="140" y="134" width="108" height="92" rx="8" fill="#000E38" stroke="#E25A1C" stroke-width="1.8" ></rect>
+<text x="194" y="154" font-size="13" fill="#FFFFFF" text-anchor="middle" font-weight="600" >executor 2</text>
+<rect x="150" y="166" width="88" height="16" rx="4" fill="#0a1440" stroke="#1E2A54" stroke-width="1" ></rect>
+<rect x="150" y="166" width="0" height="16" rx="4" fill="#00E5A4" opacity="0.85"><animate attributeName="width" dur="2.90s" repeatCount="indefinite" keyTimes="0;0.75;1" values="0;88;88"/></rect>
+<text x="194" y="178.5" font-size="11" fill="#FFFFFF" text-anchor="middle" font-weight="700" stroke="#000E38" stroke-width="3" paint-order="stroke">partition 3</text>
+<rect x="150" y="192" width="88" height="16" rx="4" fill="#0a1440" stroke="#1E2A54" stroke-width="1" ></rect>
+<rect x="150" y="192" width="0" height="16" rx="4" fill="#00E5A4" opacity="0.85"><animate attributeName="width" dur="2.20s" repeatCount="indefinite" keyTimes="0;0.75;1" values="0;88;88"/></rect>
+<text x="194" y="204.5" font-size="11" fill="#FFFFFF" text-anchor="middle" font-weight="700" stroke="#000E38" stroke-width="3" paint-order="stroke">partition 4</text>
+<path d="M195,108 C195,122 316,118 316,134" fill="none" stroke="#1E2A54" stroke-width="2"/>
+<circle r="3.5" fill="#DDCAFF" opacity="0"><animateMotion dur="1.6s" begin="0.50s" repeatCount="indefinite" path="M195,108 C195,122 316,118 316,134"/><animate attributeName="opacity" dur="1.6s" begin="0.50s" repeatCount="indefinite" keyTimes="0;0.1;0.85;1" values="0;1;1;0"/></circle>
+<rect x="262" y="134" width="108" height="92" rx="8" fill="#000E38" stroke="#E25A1C" stroke-width="1.8" ></rect>
+<text x="316" y="154" font-size="13" fill="#FFFFFF" text-anchor="middle" font-weight="600" >executor 3</text>
+<rect x="272" y="166" width="88" height="16" rx="4" fill="#0a1440" stroke="#1E2A54" stroke-width="1" ></rect>
+<rect x="272" y="166" width="0" height="16" rx="4" fill="#00E5A4" opacity="0.85"><animate attributeName="width" dur="2.55s" repeatCount="indefinite" keyTimes="0;0.75;1" values="0;88;88"/></rect>
+<text x="316" y="178.5" font-size="11" fill="#FFFFFF" text-anchor="middle" font-weight="700" stroke="#000E38" stroke-width="3" paint-order="stroke">partition 5</text>
+<rect x="272" y="192" width="88" height="16" rx="4" fill="#0a1440" stroke="#1E2A54" stroke-width="1" ></rect>
+<rect x="272" y="192" width="0" height="16" rx="4" fill="#00E5A4" opacity="0.85"><animate attributeName="width" dur="2.90s" repeatCount="indefinite" keyTimes="0;0.75;1" values="0;88;88"/></rect>
+<text x="316" y="204.5" font-size="11" fill="#FFFFFF" text-anchor="middle" font-weight="700" stroke="#000E38" stroke-width="3" paint-order="stroke">partition 6</text>
+<text x="18" y="262" font-size="15" fill="#00E5A4" text-anchor="start" font-weight="800" >_</text>
+<text x="34" y="262" font-size="15" fill="#FFFFFF" text-anchor="start" >one engine for Python, SQL and Scala</text>
+<text x="18" y="284" font-size="15" fill="#00E5A4" text-anchor="start" font-weight="800" >_</text>
+<text x="34" y="284" font-size="15" fill="#FFFFFF" text-anchor="start" >from a laptop to thousands of nodes</text>
+<text x="18" y="306" font-size="15" fill="#00E5A4" text-anchor="start" font-weight="800" >_</text>
+<text x="34" y="306" font-size="15" fill="#FFFFFF" text-anchor="start" >batch and streaming; inside Databricks, Fabric</text>
+<rect x="410" y="0" width="390" height="330" rx="14" fill="#0a1440" stroke="#1E2A54" stroke-width="1.5" ></rect><rect x="426" y="0" width="358" height="5" rx="2.5" fill="#FE6703" stroke="none" stroke-width="1.5" ></rect>
+<image x="428" y="20" width="30" height="30" href="../logos/dbt.svg"><title>dbt</title></image>
+<text x="468" y="42" font-size="20" fill="#FFFFFF" text-anchor="start" font-weight="700" >dbt</text>
+<text x="510.5" y="42" font-size="15" fill="#8F9AB8" text-anchor="start" >SQL transformations as software</text>
+<path d="M546,83.0 L560,83.0" fill="none" stroke="#1E2A54" stroke-width="2"><animate attributeName="stroke" dur="9.0s" begin="0s;transform.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.0889;0.1111;0.9556;0.9889;1.0000" values="#1E2A54;#1E2A54;#00E5A4;#00E5A4;#1E2A54;#1E2A54" /></path>
+<path d="M546,141.0 L560,141.0" fill="none" stroke="#1E2A54" stroke-width="2"><animate attributeName="stroke" dur="9.0s" begin="0s;transform.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.1556;0.1778;0.9556;0.9889;1.0000" values="#1E2A54;#1E2A54;#00E5A4;#00E5A4;#1E2A54;#1E2A54" /></path>
+<path d="M678,83.0 C748,83.0 748,83.0 748,190" fill="none" stroke="#1E2A54" stroke-width="2"><animate attributeName="stroke" dur="9.0s" begin="0s;transform.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.2667;0.2889;0.9556;0.9889;1.0000" values="#1E2A54;#1E2A54;#00E5A4;#00E5A4;#1E2A54;#1E2A54" /></path>
+<path d="M678,141.0 C714,141.0 714,141.0 714,190" fill="none" stroke="#1E2A54" stroke-width="2"><animate attributeName="stroke" dur="9.0s" begin="0s;transform.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.2667;0.2889;0.9556;0.9889;1.0000" values="#1E2A54;#1E2A54;#00E5A4;#00E5A4;#1E2A54;#1E2A54" /></path>
+<rect x="428" y="66" width="118" height="34" rx="17" fill="#000E38" stroke="#DDCAFF" stroke-width="1.8" ></rect><text x="487.0" y="88" font-size="12" fill="#DDCAFF" text-anchor="middle" font-weight="600" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >raw.readings</text>
+<rect x="428" y="124" width="118" height="34" rx="17" fill="#000E38" stroke="#DDCAFF" stroke-width="1.8" ></rect><text x="487.0" y="146" font-size="12" fill="#DDCAFF" text-anchor="middle" font-weight="600" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >raw.settlement</text>
+<rect x="560" y="66" width="118" height="34" rx="17" fill="#000E38" stroke="#1E2A54" stroke-width="1.8" ><animate attributeName="stroke" dur="9.0s" begin="0s;transform.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.0889;0.1111;0.9556;0.9889;1.0000" values="#1E2A54;#1E2A54;#00E5A4;#00E5A4;#1E2A54;#1E2A54" /></rect><text x="619.0" y="88" font-size="12" fill="#FFFFFF" text-anchor="middle" font-weight="600" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >stg_readings</text><g opacity="0"><animate attributeName="opacity" dur="9.0s" begin="0s;transform.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.1333;0.1722;0.9556;0.9944;1.0000" values="0;0;1;1;0;0" /><circle cx="676" cy="68" r="9" fill="#00E5A4"/><text x="676" y="72.5" font-size="12" fill="#000E38" text-anchor="middle" font-weight="900" >✓</text></g>
+<rect x="560" y="124" width="118" height="34" rx="17" fill="#000E38" stroke="#1E2A54" stroke-width="1.8" ><animate attributeName="stroke" dur="9.0s" begin="0s;transform.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.1556;0.1778;0.9556;0.9889;1.0000" values="#1E2A54;#1E2A54;#00E5A4;#00E5A4;#1E2A54;#1E2A54" /></rect><text x="619.0" y="146" font-size="12" fill="#FFFFFF" text-anchor="middle" font-weight="600" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >stg_settlement</text><g opacity="0"><animate attributeName="opacity" dur="9.0s" begin="0s;transform.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.2000;0.2389;0.9556;0.9944;1.0000" values="0;0;1;1;0;0" /><circle cx="676" cy="126" r="9" fill="#00E5A4"/><text x="676" y="130.5" font-size="12" fill="#000E38" text-anchor="middle" font-weight="900" >✓</text></g>
+<rect x="638" y="190" width="142" height="34" rx="17" fill="#000E38" stroke="#1E2A54" stroke-width="1.8" ><animate attributeName="stroke" dur="9.0s" begin="0s;transform.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.2667;0.2889;0.9556;0.9889;1.0000" values="#1E2A54;#1E2A54;#00E5A4;#00E5A4;#1E2A54;#1E2A54" /></rect><text x="709.0" y="212" font-size="12" fill="#FFFFFF" text-anchor="middle" font-weight="600" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >fct_daily_energy</text><g opacity="0"><animate attributeName="opacity" dur="9.0s" begin="0s;transform.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.3111;0.3500;0.9556;0.9944;1.0000" values="0;0;1;1;0;0" /><circle cx="778" cy="192" r="9" fill="#00E5A4"/><text x="778" y="196.5" font-size="12" fill="#000E38" text-anchor="middle" font-weight="900" >✓</text></g>
+<text x="428" y="214" font-size="12.5" fill="#FE6703" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >{{ ref('stg_readings') }}</text>
+<text x="428" y="196" font-size="12" fill="#8F9AB8" text-anchor="start" >models say</text>
+<g opacity="0"><animate attributeName="opacity" dur="9.0s" begin="0s;transform.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.3556;0.3944;0.9556;0.9944;1.0000" values="0;0;1;1;0;0" /><text x="780" y="243" font-size="13" fill="#00E5A4" text-anchor="end" font-weight="700" >dbt build ✓</text></g>
+<text x="428" y="262" font-size="15" fill="#00E5A4" text-anchor="start" font-weight="800" >_</text>
+<text x="444" y="262" font-size="15" fill="#FFFFFF" text-anchor="start" >every model is a SELECT; ref() is the DAG</text>
+<text x="428" y="284" font-size="15" fill="#00E5A4" text-anchor="start" font-weight="800" >_</text>
+<text x="444" y="284" font-size="15" fill="#FFFFFF" text-anchor="start" >tests, docs and lineage built in</text>
+<text x="428" y="306" font-size="15" fill="#00E5A4" text-anchor="start" font-weight="800" >_</text>
+<text x="444" y="306" font-size="15" fill="#FFFFFF" text-anchor="start" >git, code review and CI, like any code</text>
+<text x="794" y="324" text-anchor="end" font-size="11" fill="#8F9AB8" opacity="0.5">click to replay</text>
+</svg>

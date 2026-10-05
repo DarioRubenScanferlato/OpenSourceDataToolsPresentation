@@ -1,6 +1,7 @@
 """Images and other files the deck carries with it.
 
-Everything lives in ``presentation/images/`` — headshots, logos, QR codes,
+Everything lives in ``presentation/assets/`` — ``images/`` (headshots, QR codes),
+``logos/``, ``diagrams/`` (SVG diagrams, inlined by :func:`svg`),
 diagrams. Refer to a file by name and nothing has to know an absolute path:
 
     from template import assets, nf
@@ -21,6 +22,9 @@ which is what you want in a pre-talk check.
 
 from __future__ import annotations
 
+import base64
+import mimetypes
+import re
 from pathlib import Path
 from typing import Any
 
@@ -28,19 +32,23 @@ import marimo as mo
 
 from . import theme as t
 
-__all__ = ["images_dir", "path", "img", "exists", "listing"]
+__all__ = ["assets_dir", "images_dir", "path", "img", "svg", "exists", "listing"]
 
-IMAGES_DIRNAME = "images"
+ASSETS_DIRNAME = "assets"
 
 
-def images_dir() -> Path:
-    """The deck's images folder: ``presentation/images``.
+def assets_dir() -> Path:
+    """The deck's assets folder: ``presentation/assets``.
 
     Resolved from this package's own location rather than the working
     directory, so it is the same folder whether the caller is a notebook, a
     script, or a test - and regardless of where the marimo server was started.
     """
-    return Path(__file__).resolve().parent.parent / IMAGES_DIRNAME
+    return Path(__file__).resolve().parent.parent / ASSETS_DIRNAME
+
+
+#: Kept so existing callers keep working - it is the assets folder now.
+images_dir = assets_dir
 
 
 #: Tried in order when a name's own extension doesn't match a file on disk.
@@ -55,25 +63,26 @@ def path(name: str | Path) -> Path:
 
         "profilepic.jpg"
         "images/profilepic.jpg"
-        "presentation/images/profilepic.jpg"
+        "assets/images/profilepic.jpg"
+        "presentation/assets/images/profilepic.jpg"
         "/absolute/path/to/profilepic.jpg"
 
     The extension is a hint, not a requirement: ask for ``logos/powerbi.png``
     and you get ``logos/powerbi.svg`` if that is what's on disk. A logo you
     find as an SVG and one you find as a PNG shouldn't need a code change.
 
-    Returns the name as given (resolved into the images folder) when nothing
+    Returns the name as given (resolved into the assets folder) when nothing
     matches, so callers can report a path the reader recognises.
     """
     candidate = Path(name)
     if not candidate.is_absolute():
         parts = candidate.parts
-        # Drop a leading path that just restates where the images folder is.
-        for prefix in (("presentation", IMAGES_DIRNAME), (IMAGES_DIRNAME,)):
+        # Drop a leading path that just restates where the assets folder is.
+        for prefix in (("presentation", ASSETS_DIRNAME), (ASSETS_DIRNAME,)):
             if parts[: len(prefix)] == prefix:
                 parts = parts[len(prefix) :]
                 break
-        candidate = images_dir().joinpath(*parts) if parts else images_dir()
+        candidate = assets_dir().joinpath(*parts) if parts else assets_dir()
 
     if candidate.is_file():
         return candidate
@@ -85,13 +94,13 @@ def path(name: str | Path) -> Path:
 
 
 def exists(name: str | Path) -> bool:
-    """Whether ``images/<name>`` is on disk."""
+    """Whether ``assets/<name>`` is on disk."""
     return path(name).is_file()
 
 
 def listing() -> list[str]:
-    """Every file in the images folder, sorted - handy when a name is wrong."""
-    directory = images_dir()
+    """Every file in the assets folder, sorted - handy when a name is wrong."""
+    directory = assets_dir()
     if not directory.is_dir():
         return []
     return sorted(p.name for p in directory.iterdir() if p.is_file() and not p.name.startswith("."))
@@ -105,10 +114,10 @@ def img(
     strict: bool = False,
     **kwargs: Any,
 ) -> mo.Html:
-    """Render ``images/<name>``.
+    """Render ``assets/<name>``.
 
     Args:
-        name: file name inside ``presentation/images/`` (see :func:`path`
+        name: file name inside ``presentation/assets/`` (see :func:`path`
             for the spellings it accepts).
         width: any CSS length; the deck's units work here too.
         rounded: apply the template's corner radius.
@@ -122,7 +131,7 @@ def img(
         if strict:
             available = ", ".join(listing()) or "(the folder is empty)"
             raise FileNotFoundError(
-                f"{target} not found. Files in {images_dir()}: {available}"
+                f"{target} not found. Files in {assets_dir()}: {available}"
             )
         return placeholder(name, width=width)
 
@@ -155,5 +164,36 @@ def placeholder(name: str, width: str = "100%", tone: str = t.DEFAULT_TONE) -> m
         f'font-size:{t.SIZE["small"]};line-height:1.5">'
         f'<span style="text-align:center">drop '
         f'<strong style="color:{tn.accent}">{name}</strong><br>'
-        f"into presentation/images/</span></div>"
+        f"into presentation/assets/</span></div>"
     )
+
+
+def svg(name: str | Path) -> mo.Html:
+    """Inline an SVG file from the assets folder (e.g. ``diagrams/x.svg``).
+
+    Inlined rather than shown as an ``<img>``, so the drawing picks up the
+    deck's fonts (``font-family="inherit"`` only works inline) and its own
+    SMIL animations run. Size it with the file's ``width``/``viewBox`` -
+    ``width="100%"`` fills the slide's content column.
+    """
+    target = path(name)
+    if not target.exists():
+        return placeholder(str(name))
+    markup = target.read_text(encoding="utf-8")
+
+    # `<image href="../logos/x.svg">` resolves when the file is opened on its
+    # own, but not once inlined into a page that doesn't serve this folder -
+    # so local references are embedded as data URIs.
+    def _embed(match: re.Match) -> str:
+        ref = match.group(2)
+        if ref.startswith(("data:", "http:", "https:", "#")):
+            return match.group(0)
+        image = (target.parent / ref).resolve()
+        if not image.exists():
+            return match.group(0)
+        mime = mimetypes.guess_type(image.name)[0] or "application/octet-stream"
+        data = base64.b64encode(image.read_bytes()).decode("ascii")
+        return f'{match.group(1)}="data:{mime};base64,{data}"'
+
+    markup = re.sub(r'(\b(?:xlink:)?href)="([^"]+)"', _embed, markup)
+    return mo.Html(markup)

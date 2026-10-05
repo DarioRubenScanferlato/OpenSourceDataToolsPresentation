@@ -226,7 +226,9 @@ def title_slide(
             font_weight=t.WEIGHT["light"],
             line_height="1.0",
             letter_spacing="-0.02em",
-            max_width="76%",
+            # 76% wrapped a long title onto four 56pt lines - taller than the
+            # slide, so it scrolled; this keeps it to three
+            max_width="88%",
         )}">{_text(title, mark, tn.fg)}</h1>'
     )
     return slide(mo.Html(heading_html + meta), tone=tone, align="center")
@@ -667,7 +669,7 @@ def tool(
 
     Args:
         name: the product name, always shown.
-        logo: a file name in ``presentation/images/`` (``"logos/powerbi.png"``),
+        logo: a file name in ``presentation/assets/`` (``"logos/powerbi.png"``),
             or anything renderable. When the file isn't there - which is most of
             them, most of the time - the name is set in a tinted chip instead,
             so the slide reads as finished rather than broken.
@@ -841,7 +843,19 @@ def two_col(
     )
 
 
-def code(source: str, language: str = "python", tone: str = t.DEFAULT_TONE) -> mo.Html:
+#: Width of a content slide's text column, in cqw (100 minus the side margins) -
+#: the reference for ``code(fit=...)``: a full-width block is ``CONTENT_CQW``,
+#: each half of an even two-column split about ``(CONTENT_CQW - 2.5) / 2``.
+CONTENT_CQW = 100 - 2 * 86 / 960 * 100
+
+
+def code(
+    source: str,
+    language: str = "python",
+    tone: str = t.DEFAULT_TONE,
+    size: float | None = None,
+    fit: float | None = None,
+) -> mo.Html:
     """A syntax-highlighted, monospace code block sized for the deck.
 
     Highlighted with Pygments directly, *not* via marimo's own markdown code
@@ -853,6 +867,15 @@ def code(source: str, language: str = "python", tone: str = t.DEFAULT_TONE) -> m
     so this renders correctly wherever it ends up embedded - no dependency
     on a separate stylesheet actually being loaded in that context.
 
+    ``size`` (in PowerPoint points, like ``theme.SIZE``) overrides the
+    default ``SIZE["small"]`` - for a longer snippet that should still fit
+    on the slide without scrolling.
+
+    ``fit`` is the width available to the block, in ``cqw`` (the slide's
+    content column is ``CONTENT_CQW`` wide; a half of a two-column slide is
+    about 40). The font then shrinks - never grows - until the longest line
+    fits, so a snippet never needs a horizontal scrollbar.
+
     This is for code you want to *show*. To show the code of the cell you are
     on, use marimo's own toggle (``C`` in slides mode) instead.
     """
@@ -863,6 +886,12 @@ def code(source: str, language: str = "python", tone: str = t.DEFAULT_TONE) -> m
     from pygments.lexers import get_lexer_by_name
 
     _source = textwrap.dedent(source).strip()
+    _font = t.pt(size) if size is not None else t.SIZE["small"]
+    if fit is not None:
+        # monospace glyphs are ~0.6em wide; the block's side padding is
+        # 2 x SPACE["gap"] (2.5cqw each)
+        _longest = max((len(line) for line in _source.splitlines()), default=1)
+        _font = f"min({_font}, {(fit - 5.2) / (_longest * 0.61):.3f}cqw)"
     _formatter = HtmlFormatter(
         style="dracula",
         noclasses=True,
@@ -875,7 +904,7 @@ def code(source: str, language: str = "python", tone: str = t.DEFAULT_TONE) -> m
             # One step down from `SIZE["body"]` - code has more characters
             # per line than prose, so the same size that reads fine for a
             # sentence makes a multi-line snippet feel oversized on the slide.
-            font_size=t.SIZE["small"],
+            font_size=_font,
         ),
     )
     _highlighted = highlight(_source, get_lexer_by_name(language), _formatter)
