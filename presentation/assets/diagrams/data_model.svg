@@ -1,90 +1,86 @@
 <!--
-The solar data model. Bronze, one file per source system: the SCADA readings
-name only their sensor; the sensor register says which plant each sensor is
-in; plants is the asset register; the grid settlement is per plant and day.
-Derived: reading_issues (one row per bad reading, found by the cleaning step)
-and gold (one row per plant per day). Tables appear in the order the story
-is told; N:1 marks each foreign key. Inlined by template.assets.svg();
-click to replay.
+The solar data model, as a star schema. Fact tables (blue, FACT) record
+events and measurements: the SCADA sensor readings, the grid operator's daily
+settlement, and daily_plant_performance - one row per plant per day, the
+table the dashboard is built on, aggregated from the readings and joined to
+the settlement. Dimension tables (lavender, DIM) describe the things the facts
+are about: sensors (which plant each sensor is in) and plants. N:1 marks each
+foreign key. Static - inlined by template.assets.svg().
 -->
-<svg id="datamodel" viewBox="0 0 800 316" width="100%" xmlns="http://www.w3.org/2000/svg" style="display:block; font-family:inherit; cursor:pointer;">
-<g opacity="0"><animate attributeName="opacity" dur="12.0s" begin="0s;datamodel.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.0333;0.0625;0.9667;0.9958;1.0000" values="0;0;1;1;0;0" />
-<rect x="0" y="0" width="186" height="105" rx="10" fill="#0a1440" stroke="#1E2A54" stroke-width="1.8"/>
-<rect x="12" y="0" width="162" height="4" rx="2" fill="#166BFF"/>
-<text x="12" y="20" font-size="14" fill="#FFFFFF" text-anchor="start" font-weight="700" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >sensor_readings</text>
-<text x="12" y="34" font-size="11" fill="#8F9AB8" text-anchor="start" >SCADA · hourly</text>
-<text x="12" y="54" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >timestamp</text>
-<text x="12" y="73" font-size="12.5" fill="#DDCAFF" text-anchor="start" font-weight="600" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >sensor_id</text>
-<text x="176" y="73" font-size="10" fill="#DDCAFF" text-anchor="end" font-weight="700" >FK</text>
-<text x="12" y="92" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >ac_power_kw</text>
+<svg id="datamodel" viewBox="0 0 800 340" width="100%" xmlns="http://www.w3.org/2000/svg" style="display:block; font-family:inherit; cursor:pointer;">
+<g transform="translate(0,10)">
+<rect x="0" y="0" width="168" height="96" rx="10" fill="#0b1a52" stroke="#166BFF" stroke-width="1.8" ></rect>
+<rect x="12" y="0" width="144" height="4" rx="2" fill="#166BFF" stroke="none" stroke-width="1.5" ></rect>
+<text x="12" y="23" font-size="13" fill="#FFFFFF" text-anchor="start" font-weight="700" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >sensor_readings</text>
+<rect x="114" y="-9" width="44" height="18" rx="9" fill="#166BFF" stroke="#000E38" stroke-width="2" ></rect>
+<text x="136" y="4" font-size="10.5" fill="#000E38" text-anchor="middle" font-weight="800" letter-spacing="0.5">FACT</text>
+<text x="12" y="48" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >timestamp</text>
+<text x="12" y="66" font-size="12.5" fill="#DDCAFF" text-anchor="start" font-weight="600" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >sensor_id</text>
+<text x="158" y="66" font-size="10" fill="#DDCAFF" text-anchor="end" font-weight="700" >FK</text>
+<text x="12" y="84" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >ac_power_kw</text>
+<rect x="194" y="0" width="164" height="132" rx="10" fill="#0a1440" stroke="#DDCAFF" stroke-width="1.8" ></rect>
+<rect x="206" y="0" width="140" height="4" rx="2" fill="#DDCAFF" stroke="none" stroke-width="1.5" ></rect>
+<text x="206" y="23" font-size="13" fill="#FFFFFF" text-anchor="start" font-weight="700" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >sensors</text>
+<rect x="304" y="-9" width="44" height="18" rx="9" fill="#DDCAFF" stroke="#000E38" stroke-width="2" ></rect>
+<text x="326" y="4" font-size="10.5" fill="#000E38" text-anchor="middle" font-weight="800" letter-spacing="0.5">DIM</text>
+<text x="206" y="48" font-size="12.5" fill="#00E5A4" text-anchor="start" font-weight="600" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >sensor_id</text>
+<text x="348" y="48" font-size="10" fill="#00E5A4" text-anchor="end" font-weight="700" >PK</text>
+<text x="206" y="66" font-size="12.5" fill="#DDCAFF" text-anchor="start" font-weight="600" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >plant_id</text>
+<text x="348" y="66" font-size="10" fill="#DDCAFF" text-anchor="end" font-weight="700" >FK</text>
+<text x="206" y="84" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >sensor_type</text>
+<text x="206" y="102" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >model</text>
+<text x="206" y="120" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >install_date</text>
+<rect x="384" y="0" width="184" height="132" rx="10" fill="#0a1440" stroke="#DDCAFF" stroke-width="1.8" ></rect>
+<rect x="396" y="0" width="160" height="4" rx="2" fill="#DDCAFF" stroke="none" stroke-width="1.5" ></rect>
+<text x="396" y="23" font-size="13" fill="#FFFFFF" text-anchor="start" font-weight="700" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >plants</text>
+<rect x="514" y="-9" width="44" height="18" rx="9" fill="#DDCAFF" stroke="#000E38" stroke-width="2" ></rect>
+<text x="536" y="4" font-size="10.5" fill="#000E38" text-anchor="middle" font-weight="800" letter-spacing="0.5">DIM</text>
+<text x="396" y="48" font-size="12.5" fill="#00E5A4" text-anchor="start" font-weight="600" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >plant_id</text>
+<text x="558" y="48" font-size="10" fill="#00E5A4" text-anchor="end" font-weight="700" >PK</text>
+<text x="396" y="66" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >name</text>
+<text x="396" y="84" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >capacity_mw</text>
+<text x="396" y="102" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >commissioning_date</text>
+<text x="396" y="120" font-size="12.5" fill="#8F9AB8" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >…</text>
+<rect x="384" y="168" width="184" height="132" rx="10" fill="#0b1a52" stroke="#166BFF" stroke-width="1.8" ></rect>
+<rect x="396" y="168" width="160" height="4" rx="2" fill="#166BFF" stroke="none" stroke-width="1.5" ></rect>
+<text x="396" y="191" font-size="13" fill="#FFFFFF" text-anchor="start" font-weight="700" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >grid_settlement</text>
+<rect x="514" y="159" width="44" height="18" rx="9" fill="#166BFF" stroke="#000E38" stroke-width="2" ></rect>
+<text x="536" y="172" font-size="10.5" fill="#000E38" text-anchor="middle" font-weight="800" letter-spacing="0.5">FACT</text>
+<text x="396" y="216" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >settlement_date</text>
+<text x="396" y="234" font-size="12.5" fill="#DDCAFF" text-anchor="start" font-weight="600" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >plant_id</text>
+<text x="558" y="234" font-size="10" fill="#DDCAFF" text-anchor="end" font-weight="700" >FK</text>
+<text x="396" y="252" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >energy_exported_kwh</text>
+<text x="396" y="270" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >revenue_eur</text>
+<text x="396" y="288" font-size="12.5" fill="#8F9AB8" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >…</text>
+<rect x="596" y="0" width="204" height="168" rx="10" fill="#0b1a52" stroke="#166BFF" stroke-width="1.8" ></rect>
+<rect x="608" y="0" width="180" height="4" rx="2" fill="#166BFF" stroke="none" stroke-width="1.5" ></rect>
+<text x="608" y="23" font-size="13" fill="#FFFFFF" text-anchor="start" font-weight="700" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >daily_plant_performance</text>
+<rect x="746" y="-9" width="44" height="18" rx="9" fill="#166BFF" stroke="#000E38" stroke-width="2" ></rect>
+<text x="768" y="4" font-size="10.5" fill="#000E38" text-anchor="middle" font-weight="800" letter-spacing="0.5">FACT</text>
+<text x="608" y="48" font-size="12.5" fill="#DDCAFF" text-anchor="start" font-weight="600" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >plant_id</text>
+<text x="790" y="48" font-size="10" fill="#DDCAFF" text-anchor="end" font-weight="700" >FK</text>
+<text x="608" y="66" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >date</text>
+<text x="608" y="84" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >energy_generated_kwh</text>
+<text x="608" y="102" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >energy_exported_kwh</text>
+<text x="608" y="120" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >self_consumption_kwh</text>
+<text x="608" y="138" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >revenue_eur</text>
+<text x="608" y="156" font-size="12.5" fill="#8F9AB8" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >…</text>
+<path d="M168,62 C181,62 181,44 194,44" fill="none" stroke="#DDCAFF" stroke-width="2"/>
+<text x="176" y="78" font-size="12" fill="#DDCAFF" text-anchor="middle" font-weight="700" >N</text>
+<text x="188" y="38" font-size="12" fill="#DDCAFF" text-anchor="middle" font-weight="700" >1</text>
+<path d="M358,62 C371,62 371,44 384,44" fill="none" stroke="#DDCAFF" stroke-width="2"/>
+<text x="366" y="78" font-size="12" fill="#DDCAFF" text-anchor="middle" font-weight="700" >N</text>
+<text x="378" y="38" font-size="12" fill="#DDCAFF" text-anchor="middle" font-weight="700" >1</text>
+<path d="M440,168 V132" fill="none" stroke="#DDCAFF" stroke-width="2"/>
+<text x="452" y="162" font-size="12" fill="#DDCAFF" text-anchor="middle" font-weight="700" >N</text>
+<text x="452" y="146" font-size="12" fill="#DDCAFF" text-anchor="middle" font-weight="700" >1</text>
+<path d="M596,44 H568" fill="none" stroke="#DDCAFF" stroke-width="2"/>
+<text x="589" y="38" font-size="12" fill="#DDCAFF" text-anchor="middle" font-weight="700" >N</text>
+<text x="575" y="38" font-size="12" fill="#DDCAFF" text-anchor="middle" font-weight="700" >1</text>
+<path d="M84,96 V318 H704 V178" fill="none" stroke="#00E5A4" stroke-width="2" stroke-dasharray="6 5"/>
+<path d="M697.0,180.0 L704.0,170.0 L711.0,180.0 z" fill="#00E5A4"/>
+<path d="M568,248 H646 V178" fill="none" stroke="#00E5A4" stroke-width="2" stroke-dasharray="6 5"/>
+<path d="M639.0,180.0 L646.0,170.0 L653.0,180.0 z" fill="#00E5A4"/>
+<text x="394" y="312" font-size="12.5" fill="#00E5A4" text-anchor="middle" font-weight="600" >summed per plant and day, joined to the settlement</text>
 </g>
-<g opacity="0"><animate attributeName="opacity" dur="12.0s" begin="0s;datamodel.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.1167;0.1458;0.9667;0.9958;1.0000" values="0;0;1;1;0;0" />
-<rect x="214" y="0" width="180" height="143" rx="10" fill="#0a1440" stroke="#1E2A54" stroke-width="1.8"/>
-<rect x="226" y="0" width="156" height="4" rx="2" fill="#DDCAFF"/>
-<text x="226" y="20" font-size="14" fill="#FFFFFF" text-anchor="start" font-weight="700" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >sensors</text>
-<text x="226" y="34" font-size="11" fill="#8F9AB8" text-anchor="start" >sensor register</text>
-<text x="226" y="54" font-size="12.5" fill="#00E5A4" text-anchor="start" font-weight="600" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >sensor_id</text>
-<text x="384" y="54" font-size="10" fill="#00E5A4" text-anchor="end" font-weight="700" >PK</text>
-<text x="226" y="73" font-size="12.5" fill="#DDCAFF" text-anchor="start" font-weight="600" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >plant_id</text>
-<text x="384" y="73" font-size="10" fill="#DDCAFF" text-anchor="end" font-weight="700" >FK</text>
-<text x="226" y="92" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >sensor_type</text>
-<text x="226" y="111" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >model</text>
-<text x="226" y="130" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >install_date</text>
-</g>
-<g opacity="0"><animate attributeName="opacity" dur="12.0s" begin="0s;datamodel.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.2167;0.2458;0.9667;0.9958;1.0000" values="0;0;1;1;0;0" />
-<rect x="422" y="0" width="190" height="143" rx="10" fill="#0a1440" stroke="#1E2A54" stroke-width="1.8"/>
-<rect x="434" y="0" width="166" height="4" rx="2" fill="#DDCAFF"/>
-<text x="434" y="20" font-size="14" fill="#FFFFFF" text-anchor="start" font-weight="700" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >plants</text>
-<text x="434" y="34" font-size="11" fill="#8F9AB8" text-anchor="start" >asset register</text>
-<text x="434" y="54" font-size="12.5" fill="#00E5A4" text-anchor="start" font-weight="600" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >plant_id</text>
-<text x="602" y="54" font-size="10" fill="#00E5A4" text-anchor="end" font-weight="700" >PK</text>
-<text x="434" y="73" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >name</text>
-<text x="434" y="92" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >capacity_mw</text>
-<text x="434" y="111" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >commissioning_date</text>
-<text x="434" y="130" font-size="12.5" fill="#8F9AB8" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >…</text>
-</g>
-<g opacity="0"><animate attributeName="opacity" dur="12.0s" begin="0s;datamodel.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.3167;0.3458;0.9667;0.9958;1.0000" values="0;0;1;1;0;0" />
-<rect x="422" y="150" width="190" height="143" rx="10" fill="#0a1440" stroke="#1E2A54" stroke-width="1.8"/>
-<rect x="434" y="150" width="166" height="4" rx="2" fill="#8950FF"/>
-<text x="434" y="170" font-size="14" fill="#FFFFFF" text-anchor="start" font-weight="700" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >grid_settlement</text>
-<text x="434" y="184" font-size="11" fill="#8F9AB8" text-anchor="start" >grid operator · daily</text>
-<text x="434" y="204" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >settlement_date</text>
-<text x="434" y="223" font-size="12.5" fill="#DDCAFF" text-anchor="start" font-weight="600" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >plant_id</text>
-<text x="602" y="223" font-size="10" fill="#DDCAFF" text-anchor="end" font-weight="700" >FK</text>
-<text x="434" y="242" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >energy_exported_kwh</text>
-<text x="434" y="261" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >revenue_eur</text>
-<text x="434" y="280" font-size="12.5" fill="#8F9AB8" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >…</text>
-</g>
-<g opacity="0"><animate attributeName="opacity" dur="12.0s" begin="0s;datamodel.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.4167;0.4458;0.9667;0.9958;1.0000" values="0;0;1;1;0;0" />
-<rect x="0" y="150" width="186" height="105" rx="10" fill="#0a1440" stroke="#FF7A8A" stroke-width="1.8" stroke-dasharray="6 4"/>
-<rect x="12" y="150" width="162" height="4" rx="2" fill="#FF7A8A"/>
-<text x="12" y="170" font-size="14" fill="#FFFFFF" text-anchor="start" font-weight="700" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >reading_issues</text>
-<text x="12" y="184" font-size="11" fill="#8F9AB8" text-anchor="start" >derived · found by cleaning</text>
-<text x="12" y="204" font-size="12.5" fill="#DDCAFF" text-anchor="start" font-weight="600" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >sensor_id</text>
-<text x="176" y="204" font-size="10" fill="#DDCAFF" text-anchor="end" font-weight="700" >FK</text>
-<text x="12" y="223" font-size="12.5" fill="#DDCAFF" text-anchor="start" font-weight="600" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >timestamp</text>
-<text x="176" y="223" font-size="10" fill="#DDCAFF" text-anchor="end" font-weight="700" >FK</text>
-<text x="12" y="242" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >issue</text>
-</g>
-<g opacity="0"><animate attributeName="opacity" dur="12.0s" begin="0s;datamodel.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.5500;0.5792;0.9667;0.9958;1.0000" values="0;0;1;1;0;0" />
-<rect x="640" y="40" width="160" height="162" rx="10" fill="#0a1440" stroke="#00E5A4" stroke-width="1.8" stroke-dasharray="6 4"/>
-<rect x="652" y="40" width="136" height="4" rx="2" fill="#00E5A4"/>
-<text x="652" y="60" font-size="14" fill="#FFFFFF" text-anchor="start" font-weight="700" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >gold</text>
-<text x="652" y="74" font-size="11" fill="#8F9AB8" text-anchor="start" >derived · plant × day</text>
-<text x="652" y="94" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >plant_id</text>
-<text x="652" y="113" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >date</text>
-<text x="652" y="132" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >energy_generated_kwh</text>
-<text x="652" y="151" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >energy_exported_kwh</text>
-<text x="652" y="170" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >self_consumption…</text>
-<text x="652" y="189" font-size="12.5" fill="#FFFFFF" text-anchor="start" style="font-family:var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" >name</text>
-</g>
-<g opacity="0"><animate attributeName="opacity" dur="12.0s" begin="0s;datamodel.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.1417;0.1708;0.9667;0.9958;1.0000" values="0;0;1;1;0;0" /><path d="M186,69 C200,69 200,50 214,50" fill="none" stroke="#DDCAFF" stroke-width="2" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"><animate attributeName="stroke-dashoffset" dur="12.0s" begin="0s;datamodel.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.1417;0.1917;0.9667;0.9917;1.0000" values="1;1;0;0;1;1" /></path><text x="194" y="63" font-size="12" fill="#DDCAFF" text-anchor="middle" font-weight="700" >N</text><text x="207" y="44" font-size="12" fill="#DDCAFF" text-anchor="middle" font-weight="700" >1</text></g>
-<g opacity="0"><animate attributeName="opacity" dur="12.0s" begin="0s;datamodel.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.2417;0.2708;0.9667;0.9958;1.0000" values="0;0;1;1;0;0" /><path d="M394,69 C408,69 408,50 422,50" fill="none" stroke="#DDCAFF" stroke-width="2" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"><animate attributeName="stroke-dashoffset" dur="12.0s" begin="0s;datamodel.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.2417;0.2917;0.9667;0.9917;1.0000" values="1;1;0;0;1;1" /></path><text x="402" y="85" font-size="12" fill="#DDCAFF" text-anchor="middle" font-weight="700" >N</text><text x="415" y="44" font-size="12" fill="#DDCAFF" text-anchor="middle" font-weight="700" >1</text></g>
-<g opacity="0"><animate attributeName="opacity" dur="12.0s" begin="0s;datamodel.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.3417;0.3708;0.9667;0.9958;1.0000" values="0;0;1;1;0;0" /><path d="M612,219 H624 V50 H612" fill="none" stroke="#DDCAFF" stroke-width="2" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"><animate attributeName="stroke-dashoffset" dur="12.0s" begin="0s;datamodel.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.3417;0.3917;0.9667;0.9917;1.0000" values="1;1;0;0;1;1" /></path><text x="619" y="235" font-size="12" fill="#DDCAFF" text-anchor="middle" font-weight="700" >N</text><text x="619" y="44" font-size="12" fill="#DDCAFF" text-anchor="middle" font-weight="700" >1</text></g>
-<g opacity="0"><animate attributeName="opacity" dur="12.0s" begin="0s;datamodel.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.4417;0.4708;0.9667;0.9958;1.0000" values="0;0;1;1;0;0" /><path d="M93,150 V105" fill="none" stroke="#FF7A8A" stroke-width="2" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"><animate attributeName="stroke-dashoffset" dur="12.0s" begin="0s;datamodel.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.4417;0.4917;0.9667;0.9917;1.0000" values="1;1;0;0;1;1" /></path><text x="113" y="144" font-size="12" fill="#FF7A8A" text-anchor="middle" font-weight="700" >0..1</text><text x="103" y="119" font-size="12" fill="#FF7A8A" text-anchor="middle" font-weight="700" >1</text></g>
-<g opacity="0"><animate attributeName="opacity" dur="12.0s" begin="0s;datamodel.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.5750;0.6042;0.9667;0.9958;1.0000" values="0;0;1;1;0;0" /><line x1="612" y1="70" x2="638" y2="70" stroke="#00E5A4" stroke-width="2.5" stroke-dasharray="5 4"><animate attributeName="stroke-dashoffset" from="18.0" to="0" dur="1.0s" repeatCount="indefinite"/></line><path d="M628.0,63.0 L638.0,70.0 L628.0,77.0 z" fill="#00E5A4"/></g>
-<g opacity="0"><animate attributeName="opacity" dur="12.0s" begin="0s;datamodel.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.5917;0.6208;0.9667;0.9958;1.0000" values="0;0;1;1;0;0" /><line x1="626" y1="230" x2="638" y2="180" stroke="#00E5A4" stroke-width="2.5" stroke-dasharray="5 4"><animate attributeName="stroke-dashoffset" from="18.0" to="0" dur="1.0s" repeatCount="indefinite"/></line><path d="M628.9,188.1 L638.0,180.0 L642.5,191.4 z" fill="#00E5A4"/></g>
-<g opacity="0"><animate attributeName="opacity" dur="12.0s" begin="0s;datamodel.click" repeatCount="indefinite" calcMode="linear" keyTimes="0.0000;0.6167;0.6458;0.9667;0.9958;1.0000" values="0;0;1;1;0;0" /><text x="720" y="222" font-size="11.5" fill="#00E5A4" text-anchor="middle" font-weight="600" >+ readings via sensors</text><text x="720" y="238" font-size="11.5" fill="#00E5A4" text-anchor="middle" font-weight="600" >+ settlement, plants</text></g>
-<text x="0" y="306" font-size="11" fill="#00E5A4" text-anchor="start" font-weight="700" >PK</text><text x="22" y="306" font-size="11" fill="#8F9AB8" text-anchor="start" >primary key</text><text x="110" y="306" font-size="11" fill="#DDCAFF" text-anchor="start" font-weight="700" >FK</text><text x="130" y="306" font-size="11" fill="#8F9AB8" text-anchor="start" >foreign key</text><text x="214" y="306" font-size="11" fill="#DDCAFF" text-anchor="start" font-weight="700" >N  1</text><text x="248" y="306" font-size="11" fill="#8F9AB8" text-anchor="start" >many-to-one</text><rect x="338" y="297" width="22" height="11" rx="3" fill="none" stroke="#8F9AB8" stroke-dasharray="4 3"/><text x="366" y="306" font-size="11" fill="#8F9AB8" text-anchor="start" >derived, not a source file</text>
-<text x="794" y="310" text-anchor="end" font-size="11" fill="#8F9AB8" opacity="0.5">click to replay</text>
 </svg>
