@@ -114,7 +114,6 @@
         "type": "slide",
         "speakerNotes": "Click through a tab or two live."
       },
-      {},
       {
         "type": "skip"
       },
@@ -178,6 +177,10 @@
         "speakerNotes": "The real thing: the full v3 commit delta-rs wrote for the step-4 UPDATE. Three actions. commitInfo is for humans and audit; readVersion is how concurrency works - two writers race to create 00003.json, only one wins, the other checks for conflicts and retries as 00004. add carries min/max stats, so readers skip files from the log alone. remove is a tombstone. protocol and metaData only appear in the first commit, or when they change."
       },
       {
+        "type": "sub-slide",
+        "speakerNotes": "Schema evolution. Adding a column is one more commit with a new metaData action - no data file is rewritten; files written before it don't have the column, so readers fill in NULL. The flip side is enforcement: by default a write whose schema doesn't match fails. mergeSchema (Spark) or schema_mode='merge' (delta-rs) adds new columns as part of a write. Renames and drops need column mapping (name mode), which maps names to physical column ids - still metadata-only. Newer Delta versions also widen types (int to long) without a rewrite."
+      },
+      {
         "type": "slide",
         "speakerNotes": "Iceberg gets the same guarantees with a tree instead of a log: catalog -> metadata file -> manifest list (one per snapshot) -> manifests -> Parquet files. A commit is one atomic pointer swap in the catalog. Born at Netflix. Differences on the right; in practice the choice usually follows your platform - Databricks and Fabric speak Delta, Snowflake and AWS lean Iceberg - and they are converging (UniForm; Databricks bought Tabular, the Iceberg founders' company)."
       },
@@ -206,7 +209,18 @@
       },
       {
         "type": "slide",
-        "speakerNotes": "Spark for scale - when the data no longer fits one machine. dbt for SQL people - every model a SELECT, ref() builds the DAG, tests and docs come with it."
+        "speakerNotes": "Two styles, same job - pick by the team's skills more than by speed. SQL in the database: Postgres, ClickHouse or DuckDB do the work; dbt turns a folder of SELECT statements into a pipeline - ref() gives the order, plus tests, docs and lineage. Dataframes: pandas is the one everyone knows, Polars the fast modern one (Rust, lazy, all cores), Spark when it really needs a cluster - and Spark is also Scala, Java and R. The line is blurry: spark.sql, Polars' SQLContext, DuckDB querying a pandas or Polars frame in place."
+      },
+      {
+        "type": "skip"
+      },
+      {
+        "type": "sub-slide",
+        "speakerNotes": "PDS-H: Polars' TPC-H-derived benchmark - 22 analytical queries (joins, group-bys) at scale factor 10 (~10 GB) and 100 (~100 GB), on one big AWS machine (c7a.24xlarge, 96 vCPU, 192 GB), May 2025. Vendor-run, so a grain of salt - but it matches the independent ones. DuckDB and Polars are in the same league: seconds for 100 GB. PySpark is 10-30x slower on one machine - it pays for distribution it doesn't need. pandas is single-threaded and eager: ~100x slower, and out of memory at SF-100. Polars here is its streaming engine; in-memory Polars was 9.7 s and 152 s; Dask 46 s and 549 s. The other well-known one, DuckDB Labs' db-benchmark (ex H2O.ai), groupby on 50 GB on a 128-core box: DuckDB 21 s, Polars 75 s, pandas 822 s; Spark currently fails or isn't tested there. The point: most companies' data fits on one machine - Spark is for when it really doesn't."
+      },
+      {
+        "type": "sub-slide",
+        "speakerNotes": "ClickBench: published by ClickHouse, open, anyone can submit results. The dataset is one flat 'hits' table of anonymised web analytics (Yandex Metrica): 99,997,497 rows, 105 columns, ~14.8 GB as Parquet, ~70-75 GB as CSV. 43 dashboard-style queries: counts, group-bys, top-N, string filters. Score per query = (10 ms + time) / (10 ms + the fastest system's time), then a geometric mean; hot = the better of runs 2 and 3. On its default 16-vCPU / 32 GB machine, as of 20 Oct 2026: ClickHouse x3.1, DuckDB x6.0, Polars x6.6, Spark x153, plain PostgreSQL x6,588 - a row store with no indexes doing analytics. The very fastest are research engines like Umbra (about x1.4). Caveats: run by a vendor, numbers move as results are added, and one table of read-only queries is not your workload."
       },
       {
         "type": "slide",
@@ -261,11 +275,15 @@
       },
       {
         "type": "slide",
-        "speakerNotes": "For everyone in the room: an app needs more than its code. Click: Docker packs it all into one box, an image - like a shipping container, the crane doesn't care what's inside. Click: that box runs the same on a laptop, your own servers, any cloud, Kubernetes. That portability is the point - no lock-in to where you run."
+        "speakerNotes": "How Docker works, three clicks. A Dockerfile is a recipe: start from a base image, add what the app needs, say how to start it. 1: docker build makes an image - read-only layers, cached, so changing only your code rebuilds only the top layer. 2: docker push stores it in a registry - Docker Hub, GitHub, your cloud's. 3: docker run, on any machine with Docker, starts containers: isolated processes with their own files and network, sharing the host's kernel - lighter than VMs, they start in seconds. Same image everywhere: no more 'works on my machine'."
       },
       {
         "type": "sub-slide",
-        "speakerNotes": "Technical detail, skip if needed: our dashboard's Dockerfile is eight lines. Every tool in this talk ships an official image. docker compose runs the whole platform on one machine - often enough."
+        "speakerNotes": "Technical detail, skip if needed. The whole Dockerfile for a marimo dashboard: a slim Python base, pip install the libraries, copy the app folder, expose marimo's port, run it. Build, run, open the browser. The same image goes to CI and production; a new version is a new tag, and rolling back is running the old one."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "A real platform is more than one app: a database, Airflow, Superset. Each already ships an official image - you don't write Dockerfiles for them, only configuration. Click 1: on one machine, a compose.yaml lists the services, their settings, a shared network and a volume so the data survives restarts; docker compose up starts it all - often all a small team needs. Click 2: when one machine isn't enough, or mustn't be a single point of failure, Kubernetes runs the same images across several machines; Helm charts are ready-made installs for Airflow, Superset and Postgres."
       },
       {
         "type": "slide",
@@ -280,27 +298,29 @@
         "speakerNotes": "The last question of the talk: open source, or a managed platform?"
       },
       {
-        "type": "sub-slide",
-        "speakerNotes": "Optional: the trade-off at a glance, before going through it piece by piece."
+        "type": "slide",
+        "speakerNotes": "Costs. Open source has no licence fees, but you pay in development effort: running the infrastructure, and building and maintaining the software on top. If your organization is good at managing data with open-source tools, that effort turns into a competitive advantage. Managed: you pay licences plus usage (compute, storage, seats), at the vendor's prices - often in credits or capacity units that are hard to map to real cost - and they can go up: Power BI Pro went from $10 to $14 per user per month in April 2025."
       },
       {
         "type": "slide",
-        "speakerNotes": "Cost drivers side by side. Open source: no licences, servers you size, and people - usually the biggest line. Managed: per-user and capacity licences, consumption that grows with every query, egress, fewer engineers but someone watching the bill. And the cost of leaving later. One-liner: open source moves the bill from licences to people; managed moves it from people to usage."
+        "speakerNotes": "Infrastructure. Open source vs managed often comes down to on-prem vs cloud: with your own data centre, open source runs on what you already have. In between there are managed versions of open-source tools. And open source is often a business model: release the software to get adoption, then sell consulting, support or a hosted version - ClickHouse, DuckDB's MotherDuck, Airflow's Astronomer, Superset's Preset."
       },
       {
         "type": "slide",
-        "speakerNotes": "The iceberg. Above the water, the tools - free. Click: to build a platform - deployment, CI/CD, infrastructure as code, scaling. Click: to run it every day - monitoring and on-call, SLAs you now promise yourself, backups and tested restores, security patches and upgrades of every tool. A managed platform does most of this for you; that's what you pay for."
+        "speakerNotes": "Flexibility. Open source runs anywhere, so moving to another cloud means moving containers. You pick the best tool for each job instead of one vendor's bundle. And if a feature is missing you can build it, or pay someone to, instead of waiting for a vendor's roadmap."
       },
       {
         "type": "slide",
-        "speakerNotes": "The flip side: that effort buys control. Your versions and roadmap, no forced migrations or price surprises. The best tool for each job instead of one vendor's bundle - and open formats let you swap later. Any feature you need - like the D3 race or the Perspective pivot we saw - without waiting for a vendor."
+        "speakerNotes": "Compliance is where managed platforms shine: security, encryption, data masking, authentication and audit logs are built in, with certifications that help with audits. With open source the building blocks exist - Keycloak, Postgres row-level security, encryption at rest - but setting them up and keeping them maintained is on you."
       },
       {
         "type": "slide",
         "speakerNotes": "Who usually goes open source. Organisations with their own infrastructure - data centres, ops teams, data that can't leave. Organisations where data engineering is a core competence and an edge - most of these tools were born there: Airflow and Superset at Airbnb, Iceberg at Netflix, Presto at Facebook. And academia: openness to share and reproduce, tight budgets, own clusters - Postgres and Spark came out of Berkeley, DuckDB out of CWI."
       },
-      {},
-      {}
+      {
+        "type": "slide",
+        "speakerNotes": "Resources, if you want to go further: two books, the articles and benchmarks quoted in the talk, and the docs and specs of the formats we looked at. Then questions."
+      }
     ],
     "deck": {
       "transition": "none",
