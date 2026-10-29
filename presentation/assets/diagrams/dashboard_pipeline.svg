@@ -1,78 +1,50 @@
 <!--
-  How the solar dashboard is built, and how it ends up inside the deck:
-  raw CSVs -> pandas -> Altair -> marimo, with marimo's reactivity looping
-  back, and the dashboard notebook embedded into the presentation notebook.
+  How the solar dashboard works, as one picture: marimo runs the Python, and
+  everything happens inside it - read the raw CSVs (pandas), transform them
+  (pandas), display them (Altair charts + marimo filters), with marimo's
+  reactivity re-running only what a filter change affects.
   Inlined by template.assets.svg() so it inherits the deck's fonts and its
   arrows animate; the tool logos are the projects' own (../logos/), which
   assets.svg() embeds when inlining. Colours are the deck's brand tokens
   (template/theme.py).
 -->
-<svg viewBox="0 0 1000 420" width="100%" xmlns="http://www.w3.org/2000/svg" style="display:block; font-family:inherit;">
-<rect x="30" y="86" width="175" height="196" rx="14" fill="#0a1440" stroke="#1E2A54" stroke-width="1.5"/>
-<rect x="46" y="86" width="143" height="5" rx="2.5" fill="#DDCAFF"/>
-<g transform="translate(117.5,154)">
-<path d="M-26,-34 h36 l16,16 v52 h-52 z" fill="none" stroke="#DDCAFF" stroke-width="3" stroke-linejoin="round"/>
-<path d="M10,-34 v16 h16" fill="none" stroke="#DDCAFF" stroke-width="3" stroke-linejoin="round"/>
-<line x1="-16" y1="-8" x2="16" y2="-8" stroke="#8F9AB8" stroke-width="2.5"/>
-<line x1="-16" y1="2" x2="16" y2="2" stroke="#8F9AB8" stroke-width="2.5"/>
-<rect x="-24" y="12" width="48" height="18" rx="3" fill="#DDCAFF"/>
-<text x="0" y="26" text-anchor="middle" font-size="13" font-weight="800" fill="#000E38">CSV</text>
+<svg viewBox="0 0 1000 312" width="100%" xmlns="http://www.w3.org/2000/svg" style="display:block; font-family:inherit;">
+<rect x="10" y="104" width="150" height="160" rx="14" fill="#0a1440" stroke="#1E2A54" stroke-width="1.5"/>
+<rect x="24" y="104" width="122" height="5" rx="2.5" fill="#DDCAFF"/>
+<g transform="translate(85,160)">
+<path d="M-22,-29 h31 l13,13 v45 h-44 z" fill="none" stroke="#DDCAFF" stroke-width="3" stroke-linejoin="round"/>
+<path d="M9,-29 v13 h13" fill="none" stroke="#DDCAFF" stroke-width="3" stroke-linejoin="round"/>
+<line x1="-13" y1="-6" x2="13" y2="-6" stroke="#8F9AB8" stroke-width="2.5"/>
+<rect x="-21" y="9" width="42" height="16" rx="3" fill="#DDCAFF"/>
+<text x="0" y="22" text-anchor="middle" font-size="12" font-weight="800" fill="#000E38">CSV</text>
 </g>
-<text x="117.5" y="222" text-anchor="middle" font-size="24" font-weight="700" fill="#FFFFFF">Raw data</text>
-<text x="117.5" y="246" text-anchor="middle" font-size="15" fill="#8F9AB8">.csv files, one</text>
-<text x="117.5" y="264" text-anchor="middle" font-size="15" fill="#8F9AB8">per source system</text>
-<rect x="285" y="86" width="175" height="196" rx="14" fill="#0a1440" stroke="#1E2A54" stroke-width="1.5"/>
-<rect x="301" y="86" width="143" height="5" rx="2.5" fill="#00E5A4"/>
-<g transform="translate(372.5,154)">
-<image x="-40" y="-40" width="80" height="80" href="../logos/pandas.svg"><title>pandas</title></image>
-</g>
-<text x="372.5" y="222" text-anchor="middle" font-size="24" font-weight="700" fill="#FFFFFF">pandas</text>
-<text x="372.5" y="246" text-anchor="middle" font-size="15" fill="#8F9AB8">ingest, clean,</text>
-<text x="372.5" y="264" text-anchor="middle" font-size="15" fill="#8F9AB8">join, aggregate</text>
-<rect x="540" y="86" width="175" height="196" rx="14" fill="#0a1440" stroke="#1E2A54" stroke-width="1.5"/>
-<rect x="556" y="86" width="143" height="5" rx="2.5" fill="#166BFF"/>
-<g transform="translate(627.5,154)">
-<image x="-40" y="-40" width="80" height="80" href="../logos/altair.svg"><title>Altair</title></image>
-</g>
-<text x="627.5" y="222" text-anchor="middle" font-size="24" font-weight="700" fill="#FFFFFF">Altair</text>
-<text x="627.5" y="246" text-anchor="middle" font-size="15" fill="#8F9AB8">declarative charts</text>
-<text x="627.5" y="264" text-anchor="middle" font-size="15" fill="#8F9AB8">(Vega-Lite)</text>
-<rect x="795" y="86" width="175" height="196" rx="14" fill="#0a1440" stroke="#1E2A54" stroke-width="1.5"/>
-<rect x="811" y="86" width="143" height="5" rx="2.5" fill="#8950FF"/>
-<g transform="translate(882.5,154)">
-<image x="-40" y="-40" width="80" height="80" href="../logos/marimo.png"><title>marimo</title></image>
-</g>
-<text x="882.5" y="222" text-anchor="middle" font-size="24" font-weight="700" fill="#FFFFFF">marimo</text>
-<text x="882.5" y="246" text-anchor="middle" font-size="15" fill="#8F9AB8">filters, reactivity</text>
-<text x="882.5" y="264" text-anchor="middle" font-size="15" fill="#8F9AB8">and these slides</text>
-<line x1="211" y1="184.0" x2="271" y2="184.0" stroke="#00E5A4" stroke-width="3" stroke-dasharray="6 5">
-<animate attributeName="stroke-dashoffset" from="22" to="0" dur="1s" repeatCount="indefinite"/>
-</line>
-<path d="M269,177.0 L279,184.0 L269,191.0 z" fill="#00E5A4"/>
-<text x="245.0" y="172.0" text-anchor="middle" font-size="12" font-family="var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" fill="#8F9AB8">read_csv()</text>
-<line x1="466" y1="184.0" x2="526" y2="184.0" stroke="#00E5A4" stroke-width="3" stroke-dasharray="6 5">
-<animate attributeName="stroke-dashoffset" from="22" to="0" dur="1s" repeatCount="indefinite"/>
-</line>
-<path d="M524,177.0 L534,184.0 L524,191.0 z" fill="#00E5A4"/>
-<text x="500.0" y="172.0" text-anchor="middle" font-size="12" font-family="var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" fill="#8F9AB8">DataFrames</text>
-<line x1="721" y1="184.0" x2="781" y2="184.0" stroke="#00E5A4" stroke-width="3" stroke-dasharray="6 5">
-<animate attributeName="stroke-dashoffset" from="22" to="0" dur="1s" repeatCount="indefinite"/>
-</line>
-<path d="M779,177.0 L789,184.0 L779,191.0 z" fill="#00E5A4"/>
-<text x="755.0" y="172.0" text-anchor="middle" font-size="12" font-family="var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" fill="#8F9AB8">chart specs</text>
-<path d="M882.5,82 C882.5,18 372.5,18 372.5,78" fill="none" stroke="#8950FF" stroke-width="2.5" stroke-dasharray="7 6"/>
-<path d="M365.5,68 L372.5,82 L379.5,68 z" fill="#8950FF"/>
-<rect x="447.5" y="14" width="360" height="30" rx="15" fill="#000E38" stroke="#8950FF" stroke-width="1.5"/>
-<text x="627.5" y="34" text-anchor="middle" font-size="14" fill="#FFFFFF">change a filter → marimo re-runs just the affected cells</text>
-<path d="M285,304 v10 H970 v-10" fill="none" stroke="#8F9AB8" stroke-width="2"/>
-<text x="627.5" y="336" text-anchor="middle" font-size="15" fill="#FFFFFF">
-<tspan font-family="var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" fill="#00E5A4">solar_dashboard.py</tspan><tspan fill="#8F9AB8"> - the dashboard, a marimo notebook</tspan>
-</text>
-<line x1="627.5" y1="346" x2="627.5" y2="370" stroke="#00E5A4" stroke-width="2.5"/>
-<path d="M620.5,364 L627.5,376 L634.5,364 z" fill="#00E5A4"/>
-<text x="639.5" y="364" font-size="12" font-family="var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" fill="#8F9AB8">await app.embed()</text>
-<rect x="267.5" y="380" width="720" height="36" rx="18" fill="#0a1440" stroke="#00E5A4" stroke-width="1.5"/>
-<text x="627.5" y="403" text-anchor="middle" font-size="15" fill="#FFFFFF">
-<tspan font-family="var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)" fill="#00E5A4">raw_data_to_dashboards_with_os_technologies.py</tspan><tspan fill="#8F9AB8"> - this deck, a marimo notebook too</tspan>
-</text>
+<text x="85" y="222" text-anchor="middle" font-size="20" font-weight="700" fill="#FFFFFF">Raw data</text>
+<text x="85" y="244" text-anchor="middle" font-size="14" fill="#8F9AB8">.csv files</text>
+<rect x="190" y="10" width="800" height="292" rx="18" fill="none" stroke="#8950FF" stroke-width="2"/>
+<image x="208" y="22" width="34" height="34" href="../logos/marimo.png"><title>marimo</title></image>
+<text x="252" y="46" font-size="22" font-weight="700" fill="#FFFFFF">marimo<tspan dx="10" font-size="15" font-weight="400" fill="#8F9AB8">runs the Python notebook - everything below happens inside it</tspan></text>
+<rect x="215" y="72" width="235" height="168" rx="14" fill="#0a1440" stroke="#1E2A54" stroke-width="1.5"/>
+<rect x="231" y="72" width="203" height="5" rx="2.5" fill="#00E5A4"/>
+<image x="304.5" y="94" width="56" height="56" href="../logos/pandas.svg"><title>pandas</title></image>
+<text x="332.5" y="186" text-anchor="middle" font-size="22" font-weight="700" fill="#FFFFFF">Read</text>
+<text x="332.5" y="212" text-anchor="middle" font-size="14" fill="#8F9AB8" font-family="var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)">pd.read_csv()</text>
+<rect x="475" y="72" width="235" height="168" rx="14" fill="#0a1440" stroke="#1E2A54" stroke-width="1.5"/>
+<rect x="491" y="72" width="203" height="5" rx="2.5" fill="#00E5A4"/>
+<image x="564.5" y="94" width="56" height="56" href="../logos/pandas.svg"><title>pandas</title></image>
+<text x="592.5" y="186" text-anchor="middle" font-size="22" font-weight="700" fill="#FFFFFF">Transform</text>
+<text x="592.5" y="212" text-anchor="middle" font-size="14" fill="#8F9AB8">join, aggregate, filter</text>
+<rect x="735" y="72" width="235" height="168" rx="14" fill="#0a1440" stroke="#1E2A54" stroke-width="1.5"/>
+<rect x="751" y="72" width="203" height="5" rx="2.5" fill="#166BFF"/>
+<image x="824.5" y="94" width="56" height="56" href="../logos/altair.svg"><title>Altair</title></image>
+<text x="852.5" y="186" text-anchor="middle" font-size="22" font-weight="700" fill="#FFFFFF">Display</text>
+<text x="852.5" y="212" text-anchor="middle" font-size="14" fill="#8F9AB8">charts + filters</text>
+<line x1="163" y1="156" x2="205" y2="156" stroke="#00E5A4" stroke-width="3" stroke-dasharray="6 5"><animate attributeName="stroke-dashoffset" from="22" to="0" dur="1s" repeatCount="indefinite"/></line>
+<path d="M203,149 L213,156 L203,163 z" fill="#00E5A4"/>
+<line x1="452" y1="156" x2="465" y2="156" stroke="#00E5A4" stroke-width="3" stroke-dasharray="6 5"><animate attributeName="stroke-dashoffset" from="22" to="0" dur="1s" repeatCount="indefinite"/></line>
+<path d="M463,149 L473,156 L463,163 z" fill="#00E5A4"/>
+<line x1="712" y1="156" x2="725" y2="156" stroke="#00E5A4" stroke-width="3" stroke-dasharray="6 5"><animate attributeName="stroke-dashoffset" from="22" to="0" dur="1s" repeatCount="indefinite"/></line>
+<path d="M723,149 L733,156 L723,163 z" fill="#00E5A4"/>
+<path d="M852.5,242 V260 H592.5 V252" fill="none" stroke="#8950FF" stroke-width="2.5" stroke-dasharray="7 6"/>
+<path d="M585.5,254 L592.5,242 L599.5,254 z" fill="#8950FF"/>
+<text x="722.5" y="286" text-anchor="middle" font-size="14" fill="#FFFFFF">changing a filter causes marimo to re-run the dataset filtering operations</text>
 </svg>

@@ -297,7 +297,7 @@ def bronze_to_gold(
 ):
     # Bronze -> gold in one step: the SCADA sensor readings and the grid
     # operator's settlement are separate sources that only meet here, in
-    # `gold` - one row per plant per day, everything the dashboard needs.
+    # `gold_dataset` - one row per plant per day, everything the dashboard needs.
 
     # 1. Find the bad sensor readings. A dropout arrives as NaN; a *stuck*
     #    sensor keeps repeating the value it froze on, which real output
@@ -356,7 +356,7 @@ def bronze_to_gold(
     #    the plant masterdata, and derive what neither source has alone:
     #    energy used on site = generated - exported - curtailed.
     _plant_cols = plants[["plant_id", "name", "country_code", "capacity_mw"]]
-    gold = (
+    gold_dataset = (
         daily.merge(
             grid_settlement.rename(columns={"settlement_date": "date"}),
             on=["plant_id", "date"],
@@ -364,8 +364,8 @@ def bronze_to_gold(
         )
         .merge(_plant_cols, on="plant_id")
     )
-    gold["self_consumption_kwh"] = (
-        gold["energy_generated_kwh"] - gold["energy_exported_kwh"] - gold["curtailment_kwh"]
+    gold_dataset["self_consumption_kwh"] = (
+        gold_dataset["energy_generated_kwh"] - gold_dataset["energy_exported_kwh"] - gold_dataset["curtailment_kwh"]
     ).clip(lower=0)
 
     # The other sources only need the plant name joined in.
@@ -377,7 +377,7 @@ def bronze_to_gold(
     #: country filter would just duplicate the Plants one.
     REGIONS = {"GB": "EMEA", "NL": "EMEA", "DE": "EMEA", "RU": "EMEA", "CA": "Americas", "US": "Americas", "BR": "Americas", "MM": "APAC"}
     plant_region = dict(zip(plants["name"], plants["country_code"].map(REGIONS).fillna("Other")))
-    return alarms, costs, gold, maintenance, plant_region, reading_issues, readings
+    return alarms, costs, gold_dataset, maintenance, plant_region, reading_issues, readings
 
 
 @app.cell(hide_code=True)
@@ -389,13 +389,13 @@ def filters(
     NF_RULE,
     PANEL_GAP,
     dim_plants,
-    gold,
+    gold_dataset,
     mo,
     nf,
     pd,
     plant_region,
 ):
-    _min_date, _max_date = gold["date"].min(), gold["date"].max()
+    _min_date, _max_date = gold_dataset["date"].min(), gold_dataset["date"].max()
 
     # Short labels ("Dorval"), full names as values: every plant name ends
     # in "Solar Farm", which only made the selected chips overflow.
@@ -414,7 +414,7 @@ def filters(
     # own range slider is numeric-only, and a Vega-Lite brush can't be
     # resized from either end. Starts on the full range of the data.
     _daily_energy = (
-        gold.groupby("date")["energy_generated_kwh"].sum()
+        gold_dataset.groupby("date")["energy_generated_kwh"].sum()
         .reindex(pd.date_range(_min_date, _max_date, freq="D"), fill_value=0)
     )
     period_filter = mo.ui.anywidget(
@@ -469,7 +469,7 @@ def filters(
 @app.cell(hide_code=True)
 def apply_filters(
     alarms,
-    gold,
+    gold_dataset,
     costs,
     location_filter,
     maintenance,
@@ -489,8 +489,8 @@ def apply_filters(
     period_end = pd.Timestamp(period_filter.value["end"])
     _start, _end = period_start.date(), period_end.date()
 
-    gold_f = gold[
-        gold["name"].isin(_locations) & gold["date"].dt.date.between(_start, _end)
+    gold_f = gold_dataset[
+        gold_dataset["name"].isin(_locations) & gold_dataset["date"].dt.date.between(_start, _end)
     ]
     alarms_f = alarms[
         alarms["name"].isin(_locations) & alarms["triggered_at"].dt.date.between(_start, _end)

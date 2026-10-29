@@ -9,9 +9,6 @@
         "type": "skip"
       },
       {
-        "type": "skip"
-      },
-      {
         "type": "slide",
         "speakerNotes": "Open cold. Name the talk, not yourself."
       },
@@ -22,6 +19,10 @@
       {
         "type": "slide",
         "speakerNotes": "The roadmap - what this talk actually answers."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Three quick disclaimers. The code is there to demonstrate the ideas, not production code. Most of the diagrams and code were generated with AI, and I checked them. And I'll show a lot of tools to give the full picture: I'm not an expert in all of them, and I haven't run all of them in production."
       },
       {
         "type": "slide",
@@ -57,10 +58,6 @@
       {
         "type": "fragment",
         "speakerNotes": "Click: the data model, as a star schema. Facts in blue: the sensor readings, the grid settlement, and daily_plant_performance - one row per plant per day, what the dashboard is built on. Dimensions in lavender: sensors and plants. A reading only names its sensor; the sensor dimension says which plant it is in."
-      },
-      {
-        "type": "slide",
-        "speakerNotes": "Raw sensors lie: a stuck value repeats, a dropout is NaN. Point at the shaded hours; the mint line is what we put there - the typical value for that hour over the nearby days."
       },
       {
         "type": "slide",
@@ -189,10 +186,6 @@
         "speakerNotes": "Three shapes: a server for the app (Postgres), a library inside your process (DuckDB), a columnar server for real-time analytics (ClickHouse)."
       },
       {
-        "type": "sub-slide",
-        "speakerNotes": "Postgres: the default. Most used database in the Stack Overflow survey three years running; extensions make it a geo, vector or time-series database. Show https://db-engines.com/en/ranking if there's time. But it's a row store - remember the Parquet race."
-      },
-      {
         "type": "skip"
       },
       {
@@ -201,7 +194,11 @@
       },
       {
         "type": "sub-slide",
-        "speakerNotes": "ClickHouse when many users need sub-second dashboards on billions of rows, as data keeps arriving. MergeTree: cheap inserts as small parts, background merges."
+        "speakerNotes": "Postgres: the default. Most used database in the Stack Overflow survey three years running; extensions make it a geo, vector or time-series database. Show https://db-engines.com/en/ranking if there's time. But it's a row store - remember the Parquet race."
+      },
+      {
+        "type": "sub-slide",
+        "speakerNotes": "ClickHouse when many users need sub-second dashboards on billions of rows, as data keeps arriving. Click for the MergeTree diagram, then four clicks: every INSERT writes a small sorted part and queries read all of them; a background merge combines them into one bigger part, and once it is ready queries switch to it; more inserts, more merges. Inserts stay cheap, and queries end up reading few big sorted parts."
       },
       {
         "type": "slide",
@@ -239,6 +236,10 @@
         "speakerNotes": "Be fair to Power BI: for business self-service, the semantic model and the Microsoft 365 integration it is genuinely hard to beat, and someone else runs it. Open source wins on cost at scale, visual freedom, version control and embedding. Pro is $14/user/month since April 2025; free viewers need F64 capacity."
       },
       {
+        "type": "sub-slide",
+        "speakerNotes": "Something I did not expect: coding agents are really good at dataviz. This is a dashboard Kurt Buhler built with Claude Code, comparing the steps counted by his watch and by his ring. Violin, swarm, slope chart, annotations - in a UI-driven tool that is days of fighting the tool, here you describe it and get Vega-Lite or D3 back. The quote is from his post about it."
+      },
+      {
         "type": "slide",
         "speakerNotes": "Superset for data teams - Maxime Beauchemin started it at Airbnb, the same person who started Airflow. Metabase for business users: the easiest thing on this list to get running."
       },
@@ -267,7 +268,7 @@
       },
       {
         "type": "sub-slide",
-        "speakerNotes": "Prefect is the fun one: your existing functions plus two decorators, and it runs as a normal script until you want a schedule."
+        "speakerNotes": "Dagster turns it around: instead of tasks you declare assets - the tables and files you want to exist - and the function that builds each one. The parameters are the upstream assets, so the graph and the lineage come for free, Dagster knows what is stale and rebuilds only that. dbt models and Airbyte syncs show up as assets in the same graph. The screenshots, click the dots: the asset graph, ingestion and dbt in one graph, a run, an asset's page. It has been growing fast: PyPI downloads went from about 1.4M a month in September 2024 to 8.2M in September 2026 (ClickPy) - downloads include CI, so it is a trend, not users - and about 15.8k GitHub stars. In July 2026 Prefect announced it is acquiring Dagster Labs: both products stay, Dagster keeps its name and its open-source licence."
       },
       {
         "type": "slide",
@@ -290,12 +291,12 @@
         "speakerNotes": "Four clicks. You declare what should run, Kubernetes places the containers on the machines. A machine dies: its containers restart elsewhere. More users: more dashboard copies. New version: replaced one copy at a time, no downtime."
       },
       {
-        "type": "sub-slide",
-        "speakerNotes": "What it looks like: a Deployment for our own app, Helm charts for Airflow and Superset. Managed Kubernetes exists on every cloud, or k3s/OpenShift on your own servers. Be honest: it's a skill of its own."
+        "type": "slide",
+        "speakerNotes": "The last question of the talk: open source, or a managed platform?"
       },
       {
         "type": "slide",
-        "speakerNotes": "The last question of the talk: open source, or a managed platform?"
+        "speakerNotes": "Before the costs slide, a real comparison, from Adriano Sanges' talk at PyCon Italia 2026, 'The Modern Data Stack Is Overkill (Most of the Time)': the same workload priced on a Modern Data Stack and on a Python-native stack - DuckDB, dlt, dbt-core, Metabase or Lightdash. For a startup, 10 GB and 2 analysts: about 1,600 euro a month against 40, 40 times. Scale-up, 200 GB and 10 users: 6,400 against 235, 27 times. A real workload, 5 TB and 50 concurrent users: 25,000 against 4,000, still 6 times - there he swaps in ClickHouse and says ops complexity goes up. Numbers from public pricing, plus or minus 30%. The gap shrinks as you grow, and what you save in licences you partly pay in people - which is the next slide."
       },
       {
         "type": "slide",
@@ -307,15 +308,23 @@
       },
       {
         "type": "slide",
-        "speakerNotes": "Flexibility. Open source runs anywhere, so moving to another cloud means moving containers. You pick the best tool for each job instead of one vendor's bundle. And if a feature is missing you can build it, or pay someone to, instead of waiting for a vendor's roadmap."
+        "speakerNotes": "Flexibility. Open source runs anywhere, so moving to another cloud means moving containers. You pick the best tool for each job instead of one vendor's bundle. And if a feature is missing you can build it, or pay someone to, instead of waiting for a vendor's roadmap. The quote is from the 2026 State of Open Source Report survey: avoiding vendor lock-in is one of the main reasons organizations adopt open source, cited by 55% of respondents."
       },
       {
         "type": "slide",
-        "speakerNotes": "Compliance is where managed platforms shine: security, encryption, data masking, authentication and audit logs are built in, with certifications that help with audits. With open source the building blocks exist - Keycloak, Postgres row-level security, encryption at rest - but setting them up and keeping them maintained is on you."
+        "speakerNotes": "Integration. A managed platform is one product: storage, pipelines, catalog and BI already talk to each other, so you get from raw data to a shared dashboard much faster. With open source, connecting the tools - one login, the same permissions everywhere, metadata flowing between them - is your job, and it's where much of the effort goes. For many corporations Microsoft is the deciding factor: they already live in Microsoft 365 and Entra ID, and Fabric and Power BI plug straight into those accounts, Teams, Excel and SharePoint."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Governance and compliance is where managed platforms shine: security, encryption, data masking and authentication built in, certifications that help with audits, and catalogs and lineage (Unity Catalog, Purview). Open source has the building blocks - Keycloak, OpenMetadata, DataHub, Postgres row-level security - but you set them up and maintain them. Same for operations: a vendor gives you support and SLAs, with open source your team does the upgrades, patches and incidents. And open source has risks too: Elasticsearch, Redis and Terraform all changed licence, and smaller projects can lose their maintainers."
       },
       {
         "type": "slide",
         "speakerNotes": "Who usually goes open source. Organisations with their own infrastructure - data centres, ops teams, data that can't leave. Organisations where data engineering is a core competence and an edge - most of these tools were born there: Airflow and Superset at Airbnb, Iceberg at Netflix, Presto at Facebook. And academia: openness to share and reproduce, tight budgets, own clusters - Postgres and Spark came out of Berkeley, DuckDB out of CWI."
+      },
+      {
+        "type": "slide",
+        "speakerNotes": "Thank you. Two QR codes: the left one opens the GitHub repo - the slides, the dashboard and the data generator, everything from today. The right one is the feedback form, it takes a minute."
       },
       {
         "type": "slide",

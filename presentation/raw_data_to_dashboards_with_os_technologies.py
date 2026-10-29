@@ -15,6 +15,7 @@ app = marimo.App(
     width="medium",
     layout_file="layouts/raw_data_to_dashboards_with_os_technologies.slides.json",
     css_file="template/nearform.css",
+    html_head_file="template/head.html",
 )
 
 
@@ -41,46 +42,6 @@ def imports():
         textwrap,
         theme,
     )
-
-
-@app.cell(hide_code=True)
-def notes_outline(mo):
-    mo.md(r"""
-    # Index
-    - Intro 3:00
-        - Title :15
-        - Speaker presentation :45
-        - Nearform :45
-        - Agenda :30
-    - From raw data to dashboards 7:00
-        - Data sources -> Transform -> Data Store -> Visualization -> cross-filters
-    - What is a data platform 1:00
-    - Data platforms and their services (comparison of services: Fabric, Databricks, Snowflake) 2:00
-    - OS technologies 20:00
-        - postgres 3:00 - https://db-engines.com/en/ranking
-        - duckdb 3:00
-        - clickhouse 2:00
-        - airflow/prefect 1:00
-        - data formats (parquet/delta/iceberg) 5:00
-        - Data governance
-    - Data visualization 7:30
-        - pros and cons of power bi - features
-        - superset/metabase
-        - Coding your own dashboard, using javascript
-        - perspective
-    - Pros and cons of open source 7:30
-        - Decision drivers when deciding between open source or managed data platform
-        - Cost - infrastructure/memory/compute/storage, licenses, info from Adriano Sanges talk
-            - 47% of developers work in companies <100 employees. Power BI developer probably work in bigger firms
-        - Lock-in effects - proprietary software, programming languages
-        - Technical skills
-        - Flexibility
-        - Features - open source lets you implement whatever you want, managed data platforms already implement almost anything you would ever want
-        - One-stop shop
-        - Maintenance, SLAs
-        - Performance
-    """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -148,9 +109,28 @@ def slide_agenda(nf):
 
 
 @app.cell
+def slide_disclaimers(nf):
+    # Disclaimers, before the talk starts: what the code and diagrams are,
+    # and how far my own experience goes.
+    nf.slide(
+        nf.bullets(
+            [
+                "This presentation contains some demonstrative code",
+                "Most of the diagrams and code have been AI-generated",
+                "I will present many open source technologies for the sake of comprehensiveness: "
+                "I am not an expert in all of those, and I haven't tested them all in production settings",
+            ]
+        ),
+        title="Disclaimers",
+        page=4,
+    )
+    return
+
+
+@app.cell
 def slide_big_question(nf):
     nf.slide(
-        title="Is it possible to create great dashboards from raw data using open source technologies?", align='center', page=4
+        title="Is it possible to create great dashboards from raw data using open source technologies?", align='center', page=5
     )
     return
 
@@ -275,11 +255,11 @@ def slide_helpers(alt, assets, mo, nf, textwrap, theme):
         )
 
 
-    def chart_from(code, *, gold, var="chart", width=None, height=None):
+    def chart_from(code, *, gold_dataset, var="chart", width=None, height=None):
         """Run a snippet shown on a slide and hand back the chart it builds,
         so the code on the slide is *exactly* the code that drew the chart.
         A stacked (vconcat) chart gets `width` x `height` per part."""
-        scope = {"alt": alt, "gold": gold}
+        scope = {"alt": alt, "gold_dataset": gold_dataset}
         exec(textwrap.dedent(code), scope)
         chart = scope[var]
         if hasattr(chart, "vconcat"):
@@ -287,19 +267,47 @@ def slide_helpers(alt, assets, mo, nf, textwrap, theme):
                 _part.width, _part.height = width, height
         return chart
 
-    def chart_step(n, label, code, gold, *, total=4):
-        """One sub-slide of the "Plotting a chart" build-up."""
-        _lines = len(textwrap.dedent(code).strip().splitlines())
+    def chart_step(n, label, code, gold_dataset, *, total=4):
+        """One sub-slide of the "Plotting a chart" build-up.
+
+        Sized for reading from the back of the room, with the chart as wide
+        as possible: side margins of 4.5cqw instead of the template's 9%,
+        the code font up to 9pt (fewer for a long snippet: 200/lines pt, so
+        it fits without scrolling), and the code column only as wide as its
+        longest line - the chart takes the rest. The chart is drawn 420px
+        wide, no taller than the ~36cqw the slide has left, and zoomed to its
+        column, with its text set larger than Vega's 10-11px defaults and
+        any legend below it."""
+        _lines = textwrap.dedent(code).strip().splitlines()
+        _size = min(9, 200 / len(_lines))
+        _pad_x = 4.5
+        # monospace glyphs are ~0.61em wide, plus the block's side padding
+        _code_cqw = max(map(len, _lines)) * 0.61 * _size * theme.PT / theme.DECK_W * 100 + 5.2
+        _chart_cqw = 100 - 2 * _pad_x - 2.5 - _code_cqw
+        _chart = chart_from(code, gold_dataset=gold_dataset)
+        if "legend" not in _chart.encoding.color.to_dict():
+            # every plant's name ends in "Solar Farm": drop it, so that the
+            # legend fits in two columns under the plot
+            _chart.encoding.color = _chart.encoding.color.legend(
+                labelExpr="replace(datum.label, ' Solar Farm', '')"
+            )
+        _chart = (
+            _chart.configure_axis(labelFontSize=16, titleFontSize=17)
+            # under the plot, not beside it: the plant names would take half its width
+            .configure_legend(labelFontSize=16, titleFontSize=17, orient="bottom", columns=2)
+            .configure_title(fontSize=20)
+        )
         return nf.slide(
             nf.two_col(
-                nf.code(code, size=9 if _lines <= 20 else 8 if _lines <= 28 else 7, fit=47.7),
-                scaled_chart(chart_from(code, gold=gold), width=560, height=400),
-                ratio=(3, 2),
+                nf.code(code, size=_size, fit=_code_cqw),
+                scaled_chart(_chart, width=420, height=round(min(420, 420 * 36 / _chart_cqw))),
+                ratio=(round(_code_cqw, 2), round(_chart_cqw, 2)),
                 gap="2.5cqw",
             ),
             title="Plotting a chart",
             kicker=f"Step {n} of {total}: {label}",
             pad_top="5cqw",
+            pad_x=f"{_pad_x}cqw",
         )
 
     #: The cross-filtering slides' first chart; the second slide builds on it.
@@ -307,7 +315,7 @@ def slide_helpers(alt, assets, mo, nf, textwrap, theme):
         plant_sel = alt.selection_point(fields=["name"], on="click", clear="dblclick")
 
         area = (
-            alt.Chart(gold)
+            alt.Chart(gold_dataset)
             .mark_area()
             .encode(
                 x=alt.X("date:T", title=None),
@@ -382,12 +390,14 @@ def slide_live_dashboard(dashboard, full_bleed_slide):
 
 @app.cell
 def slide_dashboard_pipeline(assets, nf):
-    # How the dashboard on the previous slide is built, as one picture - a
-    # hand-drawn SVG in assets/diagrams/, inlined so it animates and uses the
-    # deck's fonts.
+    # How the dashboard on the previous slide works, as one picture: marimo
+    # runs the Python, and reading, transforming and displaying the data all
+    # happen inside it; the dashboard and this deck are output modes of the
+    # same kind of notebook. A hand-drawn SVG in assets/diagrams/, inlined so
+    # it animates and uses the deck's fonts.
     nf.slide(
         assets.svg("diagrams/dashboard_pipeline.svg"),
-        title="How the dashboard is built",
+        title="How does the dashboard work?",
         pad_top="5cqw",
     )
     return
@@ -496,105 +506,9 @@ def slide_data_model_overlay(assets, mo, theme):
 
 
 @app.cell
-def slide_imputing_sensors(alt, dashboard, mo, nf, pd, scaled_chart, theme):
-    _code = '''
-    power = sensor["ac_power_kw"]  # one sensor, hourly
-    hour = sensor["timestamp"].dt.hour
-
-    # stuck: same value as an hour ago
-    # (0 at night is normal, so ignore it)
-    stuck = power.eq(power.shift(1)) & power.gt(0)
-    bad = stuck | power.isna()
-
-    # typical value for each hour of the day:
-    # the median of that hour over 7 nearby days
-    typical = power.mask(bad).groupby(hour).transform(
-        lambda s: s.rolling(7, center=True, min_periods=1).median()
-    )
-
-    # keep the good readings, replace the bad ones
-    clean = power.mask(bad, typical)
-    '''
-    # The longest stuck stretch in the data: a flat line that runs through
-    # a whole night, with some normal hours around it.
-    # each reading's issue, if any, from the cleaning step's own table
-    _r = (
-        dashboard.defs["readings"]
-        .merge(dashboard.defs["reading_issues"], on=["sensor_id", "timestamp"], how="left")
-        .fillna({"issue": "ok"})
-        .sort_values(["sensor_id", "timestamp"])
-    )
-    _run = (_r["ac_power_kw"] != _r.groupby("sensor_id")["ac_power_kw"].shift()).cumsum()
-    _longest = _run[_r["issue"] == "stuck"].value_counts().idxmax()
-    _ep = _r[_run == _longest]
-    _sensor = _ep["sensor_id"].iloc[0]
-    _lo = _ep["timestamp"].min() - pd.Timedelta(hours=18)
-    _hi = _ep["timestamp"].max() + pd.Timedelta(hours=18)
-    _win = _r[(_r["sensor_id"] == _sensor) & _r["timestamp"].between(_lo, _hi)]
-    _bad = _win[_win["issue"] != "ok"]
-    _ymax = float(max(_win["ac_power_kw"].max(), _win["ac_power_kw_clean"].max())) * 1.05
-
-    _lines = pd.concat(
-        [
-            _win.assign(series="Raw reading", kw=_win["ac_power_kw"]),
-            # only the hours we replaced, with the value we put there
-            _bad.assign(series="Imputed value", kw=_bad["ac_power_kw_clean"]),
-        ]
-    )
-    # the bad hours themselves, as a shaded band behind the lines
-    _bands = _bad.assign(
-        series=_bad["issue"].map({"stuck": "Stuck hour", "missing": "Missing hour"}),
-        end=_bad["timestamp"] + pd.Timedelta(hours=1),
-        lo=0.0,
-        hi=_ymax,
-    )
-    _series = ["Raw reading", "Imputed value", "Stuck hour", "Missing hour"]
-    _color = alt.Color(
-        "series:N",
-        title=None,
-        scale=alt.Scale(domain=_series, range=["#8F9AB8", theme.MINT, "#FF7A8A", theme.LAVENDER]),
-        legend=alt.Legend(orient="top", direction="horizontal", symbolOpacity=1),
-    )
-    _x = alt.X("timestamp:T", title=None, axis=alt.Axis(format="%b %d %H:%M", labelAngle=0, tickCount=4))
-    _y = alt.Y("kw:Q", title="AC power (kW)", scale=alt.Scale(domain=[0, _ymax], nice=False))
-    _chart = (
-        alt.Chart(_bands)
-        .mark_rect(opacity=0.22)
-        .encode(x=_x, x2="end:T", y=alt.Y("lo:Q", axis=None), y2="hi:Q", color=_color)
-        + alt.Chart(_lines)
-        .mark_line(strokeWidth=2, point=alt.OverlayMarkDef(size=18, filled=True))
-        .encode(x=_x, y=_y, color=_color)
-    ).properties(title=_sensor)
-    nf.slide(
-        nf.two_col(
-            mo.vstack(
-                [
-                    nf.code(_code, size=9, fit=39.8),
-                    nf.bullets(
-                        [
-                            "Missing: the sensor sent nothing (NaN)",
-                            "Stuck: the same reading, hour after hour",
-                            "Fix: use the typical value for that hour over the nearby days - nights stay 0, nothing is left empty",
-                        ]
-                    ),
-                ],
-                gap=1.5,
-            ),
-            scaled_chart(_chart, width=520, height=320),
-            ratio=(1, 1),
-            gap="2.5cqw",
-        ),
-        title="Cleaning data",
-        kicker="Imputing values for broken sensors",
-        pad_top="5cqw",
-    )
-    return
-
-
-@app.cell
 def slide_bronze_to_gold(dashboard, nf):
     _code = '''
-    gold = (
+    gold_dataset = (
         readings
         .merge(sensors[["sensor_id", "plant_id"]], on="sensor_id")
         .assign(date=lambda d: d["timestamp"].dt.normalize()) # Add a timestamp column
@@ -616,9 +530,9 @@ def slide_bronze_to_gold(dashboard, nf):
     ]
     nf.slide(
         nf.code(_code, size=8, fit=nf.CONTENT_CQW),
-        nf.dataframe(dashboard.defs["gold"][_cols], max_rows=2),
+        nf.dataframe(dashboard.defs["gold_dataset"][_cols], max_rows=2),
         title="From bronze to gold",
-        kicker="Step 2: aggregate, join, derive",
+        kicker="aggregate, join, derive",
         pad_top="5cqw",
         gap="1.2cqw",
     )
@@ -631,13 +545,13 @@ def slide_chart_step1(chart_step, dashboard):
         1,
         "the simplest chart",
         '''
-        chart = alt.Chart(gold).mark_line().encode(
+        chart = alt.Chart(gold_dataset).mark_line().encode(
             x="date:T",  # T: temporal - a time axis
             y="energy_generated_kwh:Q",  # Q: quantitative
             color="name:N",  # N: nominal - one colour per plant
         )
         ''',
-        dashboard.defs["gold"],
+        dashboard.defs["gold_dataset"],
     )
     return
 
@@ -648,7 +562,8 @@ def slide_chart_step2(chart_step, dashboard):
         2,
         "stack the plants into areas",
         '''
-        chart = alt.Chart(gold).mark_area().encode(  # lines -> filled areas
+        # lines -> filled areas
+        chart = alt.Chart(gold_dataset).mark_area().encode(
             x="date:T",
             y=alt.Y(
                 "energy_generated_kwh:Q",
@@ -657,7 +572,7 @@ def slide_chart_step2(chart_step, dashboard):
             color="name:N",
         )
         ''',
-        dashboard.defs["gold"],
+        dashboard.defs["gold_dataset"],
     )
     return
 
@@ -669,13 +584,13 @@ def slide_chart_step3(chart_step, dashboard):
         "titles, outline and smooth curves",
         '''
         chart = (
-            alt.Chart(gold)
+            alt.Chart(gold_dataset)
             .mark_area(
-                line={"strokeWidth": 1.5},  # a line on top of each area
+                line={"strokeWidth": 1.5},  # outline each area
                 interpolate="monotone",  # smooth curves
             )
             .encode(
-                x=alt.X("date:T", title=None, axis=alt.Axis(format="%b %Y")),
+                x=alt.X("date:T", title=None).axis(format="%b %Y"),
                 y=alt.Y(
                     "energy_generated_kwh:Q",
                     title="Energy generated (kWh)",
@@ -683,12 +598,12 @@ def slide_chart_step3(chart_step, dashboard):
                     axis=alt.Axis(format="~s"),  # 2.2M, not 2200000
                 ),
                 color=alt.Color("name:N", legend=None),
-                order=alt.Order("name:N"),  # same stacking order always
+                order=alt.Order("name:N"),  # fixed stacking order
             )
             .properties(title="Daily energy production by plant")
         )
         ''',
-        dashboard.defs["gold"],
+        dashboard.defs["gold_dataset"],
     )
     return
 
@@ -700,10 +615,13 @@ def slide_chart_step4(chart_step, dashboard):
         "tooltips on hover",
         '''
         chart = (
-            alt.Chart(gold)
-            .mark_area(line={"strokeWidth": 1.5}, interpolate="monotone")
+            alt.Chart(gold_dataset)
+            .mark_area(
+                line={"strokeWidth": 1.5},
+                interpolate="monotone",
+            )
             .encode(
-                x=alt.X("date:T", title=None, axis=alt.Axis(format="%b %Y")),
+                x=alt.X("date:T", title=None).axis(format="%b %Y"),
                 y=alt.Y(
                     "energy_generated_kwh:Q",
                     title="Energy generated (kWh)",
@@ -715,13 +633,14 @@ def slide_chart_step4(chart_step, dashboard):
                 tooltip=[  # what to show when hovering
                     alt.Tooltip("name:N", title="Plant"),
                     alt.Tooltip("date:T", title="Date"),
-                    alt.Tooltip("energy_generated_kwh:Q", title="kWh", format=",.0f"),
+                    alt.Tooltip("energy_generated_kwh:Q",
+                                title="kWh", format=",.0f"),
                 ],
             )
             .properties(title="Daily energy production by plant")
         )
         ''',
-        dashboard.defs["gold"],
+        dashboard.defs["gold_dataset"],
     )
     return
 
@@ -735,7 +654,7 @@ def filter_widgets(DateRangeTimeline, dashboard, mo, pd, theme):
     # own filters. (A UI element's `.value` can't be read in the cell that
     # creates it, hence the split from the slide cells below.)
     _plants = dashboard.defs["dim_plants"]
-    _gold = dashboard.defs["gold"]
+    _gold = dashboard.defs["gold_dataset"]
 
     slider = mo.ui.slider(start=1, stop=10, value=5, show_value=True)
 
@@ -782,7 +701,7 @@ def slide_filter_slider(mo, nf, slider):
         mo.Html(f'<div class="dark" style="zoom:1.6; transform-origin:left;">{mo.as_html(slider).text}</div>'),
         nf.body(f"The slider is at **{slider.value}**"),
         title="Adding filters with marimo ui elements",
-        kicker="Step 1: a slider",
+        kicker="Adding a simple slider",
         pad_top="5cqw",
         gap="1.2cqw",
     )
@@ -790,8 +709,8 @@ def slide_filter_slider(mo, nf, slider):
 
 
 @app.cell
-def slide_filter_multiselect(location_filter, mo, nf):
-    _code = '''
+def slide_filter_multiselect(dashboard, location_filter, mo, nf):
+    _code = """
     plant_names = {
         name.removesuffix(" Solar Farm"): name  # short label -> full value
         for name in sorted(plants["name"])
@@ -803,19 +722,24 @@ def slide_filter_multiselect(location_filter, mo, nf):
     )
     location_filter
 
-    location_filter.value  # the list of selected plants
-    '''
+    # in another cell: re-runs whenever the selection changes
+    selected = plants[plants["name"].isin(location_filter.value)]
+    selected[["name", "country_code", "capacity_mw", "status"]]
+    """
+    _plants = dashboard.defs["dim_plants"]
+    _selected = _plants[_plants["name"].isin(location_filter.value)]
     # `wrap=True` is load-bearing: with all 8 plants selected the chip row
     # is wide, and unwrapped it pushed past the slide's right edge.
     nf.slide(
         nf.code(_code, size=9, fit=nf.CONTENT_CQW),
         mo.Html(f'<div class="dark" style="zoom:1.4;">{mo.as_html(mo.hstack([location_filter], justify="start", wrap=True)).text}</div>'),
-        nf.body(
-            f"**{len(location_filter.value)} plants selected:** "
-            + ", ".join(location_filter.value)
+        nf.dataframe(
+            _selected[["name", "country_code", "capacity_mw", "status"]].sort_values("name"),
+            max_rows=len(_plants),
+            label=f"{len(_selected)} of {len(_plants)} plants",
         ),
         title="Adding filters with marimo ui elements",
-        kicker="Step 2: a multiselect",
+        kicker="Adding a multiselect",
         pad_top="5cqw",
         gap="1.2cqw",
     )
@@ -895,7 +819,7 @@ def slide_crossfilter_step1(
     nf,
     scaled_chart,
 ):
-    _chart = chart_from(AREA_CODE, var="area", gold=dashboard.defs["gold"])
+    _chart = chart_from(AREA_CODE, var="area", gold_dataset=dashboard.defs["gold_dataset"])
     nf.slide(
         nf.two_col(
             mo.vstack(
@@ -933,7 +857,7 @@ def slide_crossfilter_step2(
     _new = '''
     # a second chart, reusing the same selection object
     bars = (
-        alt.Chart(gold)
+        alt.Chart(gold_dataset)
         .mark_bar()
         .encode(
             x=alt.X("sum(revenue_eur):Q", title="Revenue (EUR)", axis=alt.Axis(format="~s")),
@@ -944,9 +868,9 @@ def slide_crossfilter_step2(
         .add_params(plant_sel)
     )
 
-    chart = area & bars  # stacked: one click updates both
+    chart = area & bars  # we create the final chart stacking the two previous objects
     '''
-    _chart = chart_from(AREA_CODE + _new, gold=dashboard.defs["gold"], width=340, height=150)
+    _chart = chart_from(AREA_CODE + _new, gold_dataset=dashboard.defs["gold_dataset"], width=340, height=150)
     nf.slide(
         nf.two_col(
             mo.vstack(
@@ -987,7 +911,7 @@ def slide_what_if(mo, nf):
             right=mo.image(src='https://i.imgflip.com/b2gpbs.jpg', rounded=True)
         ),
 
-        title="What if..."
+        title="Great, we have a dashboard, but what if..."
     )
     return
 
@@ -1000,7 +924,7 @@ def slide_data_platform_diagram(assets, nf):
     # infrastructure under it.
     nf.slide(
         assets.svg("diagrams/data_platform.svg"),
-        title="Data platform? What do you mean?",
+        title="Sounds like you need a data platform",
         pad_top="5cqw",
     )
     return
@@ -1063,15 +987,17 @@ def slide_data_platforms_compared(assets, mo, nf, theme):
 
 
     def _tab_label(_name, _logo):
-        """Tab labels run through mo.md, so an inline <img> renders in the tab strip."""
+        """Tab labels run through mo.md, so an inline <img> renders in the tab strip.
+        The `data-nf-platform-tab` marker lets nearform.css hide this strip's
+        scrollbar (see template/theme.py)."""
         if not assets.exists(_logo):
-            return _name
+            return f"<span data-nf-platform-tab>{_name}</span>"
         _mark = assets.img(
             _logo, width="auto", rounded=False, alt=_name,
             style={"height": "1.1em", "object-fit": "contain",
                    "display": "inline-block", "vertical-align": "middle"},
         ).text
-        return f"{_mark} {_name}"
+        return f"<span data-nf-platform-tab>{_mark} {_name}</span>"
 
 
     nf.slide(
@@ -1164,7 +1090,7 @@ def platform_map_helpers(mo, nf, theme):
         return nf.slide(
             platform_map(key, width="92%"),
             title=title,
-            kicker="An open-source platform, piece by piece",
+            kicker="Sitching together an OS data platform",
             pad_top="5cqw",
             gap="2.5cqw",
         )
@@ -1254,11 +1180,11 @@ def slide_airbyte(assets, mo, nf, theme):
                     nf.tool("Airbyte", "logos/airbyte.svg", note="open-source data movement", layout="row", height=theme.pt(28)),
                     nf.bullets(
                         [
-                            "**600+ connectors:** databases, SaaS APIs and files in; warehouses, lakes and databases out",
-                            "**Point and click:** source → destination → schedule, then it copies the data on every sync",
-                            "**Incremental syncs and CDC:** only what changed since the last run",
-                            "**No connector for your API?** Build one in the Connector Builder, or in Python",
-                            "**Self-host it** on Docker or Kubernetes, or let Airbyte Cloud run it",
+                            "**600+ connectors:** databases, APIs, warehouses, lakes, SaaS.",
+                            "**Point and click UI:** to configure source, destination, and schedule",
+                            "**Incremental syncs and Change data capture:** to avoid full refreshes",
+                            "**Custom connectors** can be implemented when missing",
+                            "**Self-host it** on Docker or Kubernetes, or use the managed platform (Airbyte Cloud)",
                         ],
                         size=theme.SIZE["small"],
                     ),
@@ -1278,7 +1204,7 @@ def slide_airbyte(assets, mo, nf, theme):
 
 @app.cell
 def slide_opener_storage(platform_step):
-    platform_step("storage", "Storage: where the data lives")
+    platform_step("storage", "Storing the data")
     return
 
 
@@ -1330,7 +1256,7 @@ def slide_parquet_intro(mo, nf, theme):
             ),
             gap="3cqw",
         ),
-        title="Parquet: a compressed columnar file format",
+        title="Parquet: the file format used in data lakes",
         kicker="Data formats",
         pad_top="5cqw",
         gap="2cqw",
@@ -1384,14 +1310,15 @@ def slide_parquet_compression(dashboard, diagram, nf):
 
     nf.slide(
         diagram("diagrams/parquet_encoding.svg", width="90%"),
-        nf.stats(
+        # the measured sizes come in last, after the diagram's three steps
+        nf.fragment(nf.stats(
             [
                 (f"{_size(_csv_bytes)} → {_size(_pq_bytes)}", "sensor readings: CSV vs Parquet",
-                 f"{_csv_bytes / _pq_bytes:.0f}x smaller, {len(_raw):,} rows"),
+                 f"{_csv_bytes / _pq_bytes:.0f}x smaller  ({len(_raw):,} rows)"),
                 (f"{_size(_sensor_csv)} → {_size(_sensor_pq)}", "the sensor_id column alone",
-                 f"{_raw['sensor_id'].nunique()} distinct values, long runs"),
+                 f"{_sensor_csv / _sensor_pq:.0f}x smaller  ({len(_raw):,} rows)"),
             ]
-        ),
+        ), index=4),
         title="Compressing column data",
         kicker="Parquet - why the files are small",
         pad_top="4cqw",
@@ -1406,9 +1333,9 @@ def slide_parquet_skipping(diagram, nf):
     nf.slide(
         diagram("diagrams/parquet_anatomy.svg", width="88%"),
         nf.body(
-            "*Predicate pushdown* - and it works best when the data is sorted by what you filter on."
+            "*Predicate pushdown* - it means filtering the data at the source, before it is retrieved"
         ),
-        title="Skipping what you don't need",
+        title="Optimizing reads with filters",
         kicker="Parquet - inside the file",
         pad_top="5cqw",
     )
@@ -1428,9 +1355,10 @@ def slide_delta_intro(mo, nf, theme):
                     nf.eyebrow("Where it came from"),
                     nf.bullets(
                         [
-                            "Built at **Databricks**, by the team behind Spark; open-sourced in **2019** and now hosted by the Linux Foundation",
-                            "The problem: a data lake is just a folder of files - a failed job leaves half-written data, "
-                            "readers see changes mid-way, and you can't update or delete a row",
+                            "Built at **Databricks**, by the team behind Spark",
+                            "open-sourced in **2019** and now hosted by the Linux Foundation",
+                            "The problem: due to its compressed nature, to update a Parquet file you rewrite it entirely"
+                            "You can't just update or delete a row",
                         ],
                         size=theme.SIZE["small"],
                     ),
@@ -1447,15 +1375,15 @@ def slide_delta_intro(mo, nf, theme):
             ),
             mo.vstack(
                 [
-                    nf.eyebrow("Where you will meet it"),
+                    nf.eyebrow("Where it's used"),
                     nf.tool("Databricks", "logos/databricks.svg", note="the default format of every table",
                             layout="row", height=theme.pt(24)),
                     nf.tool("Microsoft Fabric", "logos/fabric.svg", note="OneLake stores every table as Delta Parquet",
                             layout="row", height=theme.pt(24)),
                     nf.bullets(
                         [
-                            "Also read and written by Spark, DuckDB, Trino and, from plain Python, pandas and Polars (via delta-rs)",
-                            "Open specification: the data stays yours, in files any engine can read",
+                            "Widely supported",
+                            "Open specification",
                         ],
                         size=theme.SIZE["small"],
                     ),
@@ -1464,7 +1392,7 @@ def slide_delta_intro(mo, nf, theme):
             ),
             gap="3cqw",
         ),
-        title="Delta Lake: a reliable table made of plain files",
+        title="Delta Lake: turning a bunch of files in an organized table",
         kicker="Data formats - table formats",
         pad_top="5cqw",
         gap="2cqw",
@@ -1639,10 +1567,8 @@ def slide_delta_step3_delete(delta_step):
         [("2026-06-01 12:00", "S1", 4.2, None), ("2026-06-01 12:00", "S2", 3.8, None),
          ("2026-06-01 12:15", "S1", 0.0, "deleted"), ("2026-06-01 12:15", "S2", 3.9, None)],
         [("part-0001", "removed"), ("part-0002", "new")],
-        "**Files are never edited.** The file holding the deleted row is rewritten without it: remove one file, add another. "
-        "The old file stays on disk, so version 1 can still be read back.",
-        aside="**Deletion vectors:** Databricks and Fabric can skip the rewrite. The commit keeps the same Parquet file "
-        "and attaches a small bitmap of the deleted rows; readers filter them out until the next OPTIMIZE.",
+        "",
+        aside="We can avoid re-writing the new file in newer version of Delta Lake by leveraging **deletion vectors**, which are compressed bitmaps representing deleted rows",
     )
     return
 
@@ -1777,10 +1703,6 @@ def slide_delta_real_log(mo, nf, theme):
             '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:1.5cqw; align-items:start;">'
             + "".join(f'<div style="min-width:0;">{mo.as_html(_c).text}</div>' for _c in _cols)
             + "</div>"
-        ),
-        nf.caption(
-            "_delta_log/00000000000000000003.json, written by delta-rs for the step-4 UPDATE, every field kept. On disk "
-            "each action is a single line, stats is a JSON string and file names carry a full UUID (shortened here)."
         ),
         title="Inside a real log file",
         kicker="Delta Lake - one commit, action by action",
@@ -1946,50 +1868,11 @@ def slide_engines_overview(diagram, nf):
 
 
 @app.cell
-def slide_postgres(assets, mo, nf, theme):
-    # Engines, 2 of 4: Postgres. Survey numbers: Stack Overflow Developer
-    # Survey 2025 (survey.stackoverflow.co/2025/technology); DB-Engines'
-    # DBMS of the Year (db-engines.com/en/blog_post/106).
-    nf.slide(
-        nf.two_col(
-            assets.svg("diagrams/postgres_extensions.svg"),
-            mo.vstack(
-                [
-                    nf.stats(
-                        [("55.6%", "of developers use it", "#1 database, Stack Overflow survey 2025"),
-                         ("4x", "DBMS of the Year", "DB-Engines: 2017, 2018, 2020, 2023")],
-                        columns=2,
-                    ),
-                    nf.bullets(
-                        [
-                            "Transactions, constraints, rich SQL - boringly reliable",
-                            "Extensions make it a geo, vector or time-series database",
-                            "Permissive licence, no single vendor: the community owns it",
-                            "**But** a row store: slow for big analytical scans - remember the Parquet race",
-                        ],
-                        size=theme.SIZE["small"],
-                    ),
-                ],
-                gap=1.2,
-            ),
-            ratio=(1, 1),
-            gap="2.5cqw",
-            align="center",
-        ),
-        title="PostgreSQL: the default database",
-        kicker="Storage and query engines",
-        pad_top="4.5cqw",
-    )
-    return
-
-
-@app.cell
 def duckdb_editor(mo):
     # The DuckDB slide's editor. Created here, shown on the next slide: a UI
     # element's value can't be read in the cell that creates it.
     duckdb_sql = mo.ui.code_editor(
         value=(
-            "-- two raw files, joined in place: no server\n"
             "SELECT s.plant_id,\n"
             "       count(*) AS readings,\n"
             "       round(sum(r.ac_power_kw) / 1e3) AS mwh\n"
@@ -2012,13 +1895,13 @@ def slide_duckdb_live(bronze, dashboard, duckdb_sql, mo, nf):
 
     import duckdb
 
-    # Engines, 3 of 4: DuckDB, live. The query runs in this notebook's own
-    # process on every edit - against the raw CSV, or `gold`, the
+    # Engines, 2 of 4: DuckDB, live. The query runs in this notebook's own
+    # process on every edit - against the raw CSV, or `gold_dataset`, the
     # dashboard's DataFrame, registered as a table.
     _editor_w = 450
     _con = duckdb.connect()
     _con.execute(f"SET file_search_path = '{bronze.BRONZE_DIR.parents[2].as_posix()}'")
-    _con.register("gold", dashboard.defs["gold"])
+    _con.register("gold_dataset", dashboard.defs["gold_dataset"])
     _t0 = time.perf_counter()
     try:
         _df = _con.sql(duckdb_sql.value).df()
@@ -2041,7 +1924,7 @@ def slide_duckdb_live(bronze, dashboard, duckdb_sql, mo, nf):
                         f'<div style="width:{_editor_w}px; zoom:calc(100cqw / {_editor_w}px);">'
                         f"{mo.as_html(duckdb_sql).text}</div></div>"
                     ),
-                    nf.caption("Edit me - it re-runs. Also try: SELECT * FROM gold"),
+                    nf.caption("Edit me - it re-runs."),
                 ],
                 gap=0.4,
             ),
@@ -2051,13 +1934,12 @@ def slide_duckdb_live(bronze, dashboard, duckdb_sql, mo, nf):
         ),
         nf.cards(
             [
-                ("In-process", "pip install duckdb: no server - SQLite for analytics"),
+                ("In-process", "similar to SQLite but aimed at analytical workloads"),
                 ("Reads everything", "Parquet, CSV, JSON, Iceberg, Delta; local or S3"),
                 ("Fast on one machine", "columnar, vectorized, larger-than-memory"),
             ]
         ),
-        title="DuckDB: an analytical database in your process",
-        kicker="Storage and query engines - live",
+        title="DuckDB: an in-process analytical database",
         pad_top="4.5cqw",
         gap="1.4cqw",
     )
@@ -2065,28 +1947,70 @@ def slide_duckdb_live(bronze, dashboard, duckdb_sql, mo, nf):
 
 
 @app.cell
-def slide_clickhouse(assets, nf, theme):
-    # Engines, 4 of 4: ClickHouse - MergeTree on the left, why it's fast on
-    # the right.
+def slide_postgres(assets, mo, nf, theme):
+    # Engines, 3 of 4: Postgres. Survey numbers: Stack Overflow Developer
+    # Survey 2025 (survey.stackoverflow.co/2025/technology); DB-Engines'
+    # DBMS of the Year (db-engines.com/en/blog_post/106).
     nf.slide(
         nf.two_col(
-            assets.svg("diagrams/clickhouse_mergetree.svg"),
-            nf.bullets(
+            assets.svg("diagrams/postgres_extensions.svg"),
+            mo.vstack(
                 [
-                    "**Real-time analytics:** sub-second queries over billions of rows, for many users at once",
-                    "**Columnar, compressed, vectorized** - the Parquet ideas, inside a server",
-                    "**MergeTree:** inserts land as small sorted parts, merged in the background",
-                    "**Sparse primary index:** skips blocks of rows, like Parquet's row groups",
-                    "**Materialized views** update as the data arrives",
-                    "Apache 2.0 - self-host it, or use ClickHouse Cloud",
+                    nf.stats(
+                        [("55.6%", "of developers use it", "#1 database, Stack Overflow survey 2025"),
+                         ("4x", "DBMS of the Year", "DB-Engines: 2017, 2018, 2020, 2023")],
+                        columns=2,
+                    ),
+                    nf.bullets(
+                        [
+                            "Fully featured and reliable database with rich SQL",
+                            "Extensions for optimized geo, vector or time-series data structures",
+                            "Transactional database (but some plugins exist for columnar storage)",
+                        ],
+                        size=theme.SIZE["small"],
+                    ),
                 ],
-                size=theme.SIZE["small"],
+                gap=1.2,
             ),
             ratio=(1, 1),
             gap="2.5cqw",
             align="center",
         ),
-        title="ClickHouse: analytics at scale, in real time",
+        title="PostgreSQL: the default database",
+        kicker="Storage and query engines",
+        pad_top="4.5cqw",
+    )
+    return
+
+
+@app.cell
+def slide_clickhouse(assets, mo, nf, theme):
+    # Engines, 4 of 4: ClickHouse - why it's fast on the left; MergeTree on
+    # the right, hidden until the first click (it then steps through its own
+    # four clicks).
+    nf.slide(
+        nf.two_col(
+            nf.bullets(
+                [
+                    "**Real-time analytics:** fast queries over billions of rows, for many concurrent users",
+                    "**Columnar, compressed, vectorized** - same concepts as Parquet, but inside a server",
+                    "**MergeTree:** inserts land as small sorted parts, merged in the background",
+                    "**Sparse primary index:** skips blocks of rows, like Parquet's row groups",
+                    "**Materialized views** update as the data arrives",
+                    "Apache 2.0 - can be self-hosted or used through ClickHouse Cloud",
+                ],
+                size=theme.SIZE["small"],
+            ),
+            mo.Html(
+                '<div class="fragment" data-fragment-index="1">'
+                + assets.svg("diagrams/clickhouse_mergetree.svg").text
+                + "</div>"
+            ),
+            ratio=(1, 1),
+            gap="2.5cqw",
+            align="center",
+        ),
+        title="ClickHouse: an OLAP database for real time analytics",
         kicker="Storage and query engines",
         pad_top="4.5cqw",
     )
@@ -2127,15 +2051,13 @@ def slide_transformation_styles(mo, nf, theme):
                  ("DuckDB", "logos/duckdb.svg"), ("dbt", "logos/dbt.svg")],
                 [
                     "The data stays where it is: the database does the work",
-                    "dbt: every model is a SELECT; ref() sets the order; tests and docs built in",
-                    "For teams that think in SQL",
+                    "Use dbt to manage SQL code, and deploy it to your database/data lake",
                 ],
                 """
-                -- models/gold/daily_plant_performance.sql
-                select plant_id, date,
+                SELECT plant_id, date,
                        sum(energy_kwh) as energy_generated_kwh
-                from {{ ref('silver_readings') }}
-                group by plant_id, date
+                FROM SensorReadings
+                GROUP BY plant_id, date
                 """,
                 "sql",
             ),
@@ -2143,13 +2065,13 @@ def slide_transformation_styles(mo, nf, theme):
                 "Dataframes",
                 [("pandas", "logos/pandas.svg"), ("Polars", "logos/polars.svg"), ("Spark", "logos/spark.svg")],
                 [
-                    "Transformations as code: chained operations on a table object",
-                    "pandas or Polars on one machine; Spark when it needs a cluster",
-                    "Not only Python: Spark in Scala, Java or R; Polars in Rust; dplyr in R",
+                    "Interact with dataframes through some programming language",
+                    "Popular tools are pandas (when working locally) and Spark (for distributed workloads)",
+                    "I highly recommend the polars library, which now supports both local, and distributed workloads",
                 ],
                 """
-                gold = (
-                    pl.scan_parquet("silver/readings/*.parquet")
+                gold_dataset = (
+                    polars.scan_parquet("sensors/readings/*.parquet")
                     .group_by("plant_id", "date")
                     .agg(pl.col("energy_kwh").sum()
                            .alias("energy_generated_kwh"))
@@ -2161,8 +2083,7 @@ def slide_transformation_styles(mo, nf, theme):
             gap="2.5cqw",
         ),
         nf.body(
-            "**The line is blurry:** many dataframe engines also take SQL - *spark.sql(...)* in Spark, "
-            "Polars' *SQLContext*, DuckDB querying a pandas DataFrame directly - so one pipeline can mix both."
+            "Note that most dataframe engines also support SQL queries on their underlying data"
         ),
         title="Transformation: SQL or dataframes?",
         kicker="Transformation - two styles",
@@ -2228,7 +2149,7 @@ def slide_benchmark_pdsh(bar_chart, mo, nf):
             "Total time for 22 queries, lower is better. PDS-H, a TPC-H-derived benchmark run by Polars (pola.rs/posts/benchmarks), "
             "May 2025: Polars 1.30 (streaming engine), DuckDB 1.3, PySpark 4.0, pandas 2.2, on one AWS c7a.24xlarge (96 vCPU, 192 GB)."
         ),
-        title="One machine goes a long way",
+        title="Benchmarking dataframe libraries",
         kicker="Transformation - performance",
         pad_top="5cqw",
         gap="3cqw",
@@ -2297,15 +2218,16 @@ def slide_dataviz_ecosystem(mo, nf, theme):
     # coding. Logos come from assets/logos/; a missing one falls back to an
     # initials chip.
     _layers = [
+
+  
         ("BI apps (low/no code)", [
             ("Apache Superset", "logos/superset.svg"), ("Metabase", "logos/metabase.svg"),
-            ("Grafana", "logos/grafana.svg"), ("Lightdash", "logos/lightdash.svg"),
-            ("Redash", "logos/redash.svg"),
+            ("Grafana", "logos/grafana.svg")
         ]),
+
         ("Dashboards as code", [
             ("Streamlit", "logos/streamlit.svg"), ("Dash", "logos/plotly.svg"),
-            ("marimo", "logos/marimo.png"), ("Evidence", "logos/evidence.svg"),
-            ("Observable Framework", "logos/observable.svg"),
+            ("marimo", "logos/marimo.png")
         ]),
         ("Chart libraries", [
             ("Altair · Vega-Lite", "logos/altair.svg"), ("Plotly", "logos/plotly.svg"),
@@ -2314,7 +2236,7 @@ def slide_dataviz_ecosystem(mo, nf, theme):
         ]),
         ("Run in the browser with WASM/GPU", [
             ("Perspective", "logos/perspective.svg"), ("DuckDB-WASM", "logos/duckdb.svg"),
-            ("deck.gl", "logos/deckgl.svg"), ("Pyodide", "logos/pyodide.svg"),
+            ("deck.gl", "logos/deckgl.svg"),
         ]),
     ]
     _tone = theme.TONES["navy"]
@@ -2390,14 +2312,14 @@ def slide_open_source_vs_powerbi(assets, mo, nf, theme):
     # Microsoft's list prices since April 2025.
     _PBI, _OSS = "#F2C811", theme.MINT
     _rows = [
-        ("Self-service", "drag-and-drop Desktop app (Windows-only)", "Superset and Metabase come close", "pbi"),
-        ("Semantic model", "relationships, DAX measures, row-level security", "dbt metrics, Cube: a separate piece", "pbi"),
-        ("Microsoft 365", "Teams, Excel, Entra ID built in", "you wire up SSO and sharing", "pbi"),
+        ("Self-service", "easy to install, drag and drop", "Superset and Metabase come close", "pbi"),
+        ("Semantic model", "relationships, DAX measures, row-level security", "available, but as separate tools", "pbi"),
+        ("Microsoft 365", "Teams, Excel, Entra ID built in", "authentication needs to be configured", "pbi"),
         ("Operations", "SaaS: Microsoft runs it", "you host, patch, secure (or buy managed)", "pbi"),
-        ("Cost", "$14 / user / month; free viewers need F64", "free licence: pay for servers and people", "oss"),
+        ("Cost", "pay for subscription/capacity", "free", "oss"),
         ("Visual freedom", "fixed visuals, custom ones in TypeScript", "anything a browser can draw", "oss"),
-        ("Version control", "PBIP / TMDL help, still awkward to review", "it's code: git, review, CI", "oss"),
-        ("Embedding", "Power BI Embedded needs paid capacity", "embed anywhere, any way", "oss"),
+        ("Version control", "PBIP / TMDL help, still awkward to review", "just use git", "oss"),
+        ("Embedding", "Power BI Embedded needs paid capacity", "do whatever you want", "oss"),
     ]
     _tone = theme.TONES["navy"]
     _cell = f"padding:0.55cqw {theme.SPACE['gap_sm']}; border-bottom:1px solid {_tone.rule}; vertical-align:middle;"
@@ -2424,14 +2346,51 @@ def slide_open_source_vs_powerbi(assets, mo, nf, theme):
             f'<table style="width:100%; border-collapse:collapse; font-size:{theme.SIZE["small"]}; line-height:1.3;">'
             f"<thead>{_head}</thead><tbody>{_body}</tbody></table>"
         ),
-        nf.body(
-            "**Power BI** wins in a Microsoft shop where business users build their own reports. "
-            "**Open source** wins when dashboards are code, are part of a product, or reach thousands of viewers."
-        ),
         title="Open source or Power BI?",
         kicker="Data visualization",
         pad_top="4.5cqw",
         gap="1.4cqw",
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def slide_dataviz_coding_agents(assets, mo, nf, theme):
+    # Dataviz with coding agents: a dashboard Kurt Buhler built with Claude
+    # Code, next to what he wrote about it (the cuts are his post's).
+    import html as _html
+
+    _paras = [
+        "If you enjoy visualizing data [...] try it with coding agents. You'll fall in love with dataviz all over again [...] "
+        "I haven't felt this inspired and interested in data design since I first used Tableau and Power BI years ago... [...]",
+        "ask Claude Code to create it for you in vega, vega-lite, or d3.js [...] "
+        "You'll never see the current UI-driven visualization tools the same, again.",
+    ]
+    _quote = mo.Html(
+        f'<blockquote style="margin:0; font-family:{theme.SERIF}; font-size:{theme.SIZE["body"]}; '
+        f'font-weight:{theme.WEIGHT["light"]}; line-height:1.4; color:{theme.TONES["navy"].fg};">'
+        + "".join(f'<p style="margin:0 0 0.8cqw;">{"&ldquo;" if _i == 0 else ""}{_html.escape(_p)}{"&rdquo;" if _i == len(_paras) - 1 else ""}</p>'
+                  for _i, _p in enumerate(_paras))
+        + f'<div style="margin-top:{theme.SPACE["gap_sm"]}; font-family:inherit; font-size:{theme.SIZE["small"]}; '
+        f'font-weight:400; color:{theme.MINT};">Kurt Buhler</div></blockquote>'
+    )
+    nf.slide(
+        nf.two_col(
+            mo.vstack(
+                [
+                    assets.img("images/kurt-buhler-data-visualization.png", alt="A fitness dashboard by Kurt Buhler, made with Claude Code"),
+                    nf.caption("A dashboard by Kurt Buhler, made with Claude Code."),
+                ],
+                gap=0.4,
+            ),
+            _quote,
+            ratio=(1.45, 1),
+            gap="2.5cqw",
+            align="center",
+        ),
+        title="Dataviz with coding agents",
+        kicker="Data visualization",
+        pad_top="4.5cqw",
     )
     return
 
@@ -2490,7 +2449,7 @@ def slide_d3_race(BarChartRace, dashboard, mo, pd, theme):
     # The D3 slide's widget: weekly energy per plant, as running totals.
     # Created here, shown on the next slide (a UI element is bound to one
     # live mount). Colours are the dashboard's own, so plants match.
-    _gold = dashboard.defs["gold"]
+    _gold = dashboard.defs["gold_dataset"]
     _names = sorted(_gold["name"].unique())
     _plant_color = dict(zip(_names, dashboard.defs["PLANT_COLORS"]))
     _weekly = (
@@ -2534,7 +2493,7 @@ def slide_wasm(diagram, nf, theme):
             columns=3,
             gap=theme.SPACE["gap_sm"],
         ),
-        title="WebAssembly: the database moves into the browser",
+        title="Running compiled code in the browser with WebAssembly",
         kicker="Data visualization - WASM",
         pad_top="4.5cqw",
         gap="1.2cqw",
@@ -2547,19 +2506,26 @@ def perspective_widget(dashboard, mo, pd):
     from perspective.widget import PerspectiveWidget
 
     # The Perspective slide's widget: the fleet's P&L, one row per plant,
-    # day and line - revenue (+, from the grid settlement, with the energy
-    # behind it) and every cost line (-, from the finance system). Summed,
-    # the bars are the margin. binding_mode="client-server": Python ships the
-    # table to the browser once, as Arrow, and Perspective's WASM engine does
-    # every pivot, filter and chart from there - no server calls.
-    _cols = ["date", "plant", "country", "line", "kind", "amount_eur", "energy_kwh"]
+    # day and line - revenue (+, from the grid settlement) and every cost line
+    # (-, from the finance system). Summed, the bars are the margin. Revenue
+    # rows also carry the plant's energy figures, tariff and capacity, so the
+    # settings panel has more than one metric to drag in; cost rows leave
+    # them empty. binding_mode="client-server": Python ships the table to the
+    # browser once, as Arrow, and Perspective's WASM engine does every pivot,
+    # filter and chart from there - no server calls.
     _names = {"name": "plant", "country_code": "country"}  # readable in Perspective's column list
-    _revenue = dashboard.defs["gold"].rename(columns=_names).assign(
-        line="Revenue", kind="revenue", amount_eur=lambda d: d["revenue_eur"], energy_kwh=lambda d: d["energy_exported_kwh"]
+    _energy = ["energy_generated_kwh", "energy_exported_kwh", "self_consumption_kwh", "curtailment_kwh"]
+    _cols = ["date", "plant", "country", "line", "kind", "amount_eur", "revenue_eur", "cost_eur",
+             *_energy, "tariff_eur_per_kwh", "capacity_mw"]
+    _revenue = dashboard.defs["gold_dataset"].rename(columns=_names).assign(
+        line="Revenue", kind="revenue", amount_eur=lambda d: d["revenue_eur"], cost_eur=float("nan")
     )[_cols]
-    _costs = dashboard.defs["costs"].rename(columns={"cost_date": "date", "category": "line", "cost_type": "kind", **_names}).assign(
-        amount_eur=lambda d: -d["amount_eur"], energy_kwh=0.0
-    )[_cols]
+    _costs = (
+        dashboard.defs["costs"]
+        .rename(columns={"cost_date": "date", "category": "line", "cost_type": "kind", **_names})
+        .assign(cost_eur=lambda d: d["amount_eur"], amount_eur=lambda d: -d["amount_eur"], revenue_eur=float("nan"),
+                tariff_eur_per_kwh=float("nan"), **{_c: float("nan") for _c in _energy})[_cols]
+    )
     _pnl = pd.concat([_revenue, _costs], ignore_index=True)
     perspective_view = mo.ui.anywidget(
         PerspectiveWidget(
@@ -2570,6 +2536,8 @@ def perspective_widget(dashboard, mo, pd):
             group_by=["month"],
             split_by=["line"],
             columns=["amount_eur"],
+            # sums by default, except where a sum means nothing
+            aggregates={"tariff_eur_per_kwh": "avg", "capacity_mw": "avg"},
             theme="Pro Dark",
             settings=False,  # the presenter opens the panel live
         )
@@ -2589,12 +2557,8 @@ def slide_perspective_live(mo, nf, perspective_view):
             f'<div style="width:1150px; height:520px; overflow:hidden; zoom:calc(100cqw / 1150px);">'
             f"{mo.as_html(perspective_view).text}</div></div>"
         ),
-        nf.caption(
-            "The fleet's P&L by month: revenue up, every cost line down - the net is the margin. Open the settings (top left): "
-            "split by plant or country, switch to a datagrid, filter a year - nothing goes back to Python."
-        ),
         title="Perspective: a pivot engine in WebAssembly",
-        kicker="Data visualization - WASM, live",
+        kicker="Data visualization with WASM",
         pad_top="4.5cqw",
         gap="1.2cqw",
     )
@@ -2603,7 +2567,7 @@ def slide_perspective_live(mo, nf, perspective_view):
 
 @app.cell
 def slide_opener_orchestration(platform_step):
-    platform_step("orchestration", "Orchestration: running it all on schedule")
+    platform_step("orchestration", "Orchestration and scheduling")
     return
 
 
@@ -2644,7 +2608,7 @@ def slide_airflow(assets, mo, nf, theme):
                             def build_gold(paths): ...
 
                             @task
-                            def refresh_dashboard(gold): ...
+                            def refresh_dashboard(gold_dataset): ...
 
                             raw = extract.expand(
                                 source=["readings", "settlement", "plants"]
@@ -2679,56 +2643,72 @@ def slide_airflow(assets, mo, nf, theme):
 
 
 @app.cell
-def slide_prefect(assets, mo, nf, theme):
-    # Orchestration, 3 of 3: Prefect - a flow run's timeline graph, and the
-    # same pipeline as plain decorated Python.
-    _shot = assets.img(
-        "images/prefect-flow-run.png",
-        alt="Prefect flow run page",
-        # the screenshot's bottom half is the log list: show the run graph only
-        style={"aspect-ratio": "2036 / 790", "object-fit": "cover", "object-position": "top"},
+def slide_dagster(assets, bar_chart, mo, nf, theme):
+    # Orchestration, 3 of 3: Dagster - its UI in a click-through carousel
+    # (screenshots from the Dagster docs; same CSS radio carousel as Airbyte's),
+    # and how fast it has been growing: PyPI downloads in September of each
+    # year, from ClickPy (clickpy.clickhouse.com).
+    _tone = theme.TONES["navy"]
+    _shots = [
+        ("images/dagster-asset-lineage.png", "The asset graph: every table, what it is built from, when it was last built"),
+        ("images/dagster-dbt-assets.png", "Ingestion (Sling) and dbt models as assets in one graph"),
+        ("images/dagster-run.png", "A run: its steps on a timeline, with the logs"),
+        ("images/dagster-asset-details.png", "An asset's page: its upstream assets, and whether it is out of date"),
+    ]
+    _css = "".join(
+        f"#dg-shot-{_i}:checked ~ .dg-frames .dg-{_i} {{ opacity:1; }} "
+        f"#dg-shot-{_i}:checked ~ .dg-dots label[for=dg-shot-{_i}] {{ background:{theme.MINT}; }} "
+        for _i in range(len(_shots))
+    )
+    _carousel = (
+        f"<style>.dg-frames > div {{ opacity:0; transition:opacity .4s; }} .dg-dots label {{ cursor:pointer; }} {_css}</style>"
+        '<div style="position:relative;">'
+        + "".join(
+            f'<input type="radio" name="dg-shot" id="dg-shot-{_i}" {"checked" if _i == 0 else ""} style="display:none;">'
+            for _i in range(len(_shots))
+        )
+        + '<div class="dg-frames" style="display:grid;">'
+        + "".join(
+            f'<div class="dg-{_i}" style="grid-area:1 / 1;">'
+            + assets.img(_f, alt=_alt, style={"aspect-ratio": "2 / 1", "object-fit": "cover", "object-position": "left top"}).text
+            + f'<div style="font-size:{theme.SIZE["caption"]}; color:{_tone.muted}; margin-top:0.5cqw;">{_alt}</div></div>'
+            for _i, (_f, _alt) in enumerate(_shots)
+        )
+        + '</div><div class="dg-dots" style="display:flex; gap:0.8cqw; justify-content:center; margin-top:0.5cqw;">'
+        + "".join(
+            f'<label for="dg-shot-{_i}" style="width:1cqw; height:1cqw; border-radius:50%; border:1px solid {theme.MINT};"></label>'
+            for _i in range(len(_shots))
+        )
+        + "</div></div>"
     )
     nf.slide(
         nf.two_col(
+            mo.Html(_carousel),
             mo.vstack(
-                [_shot, nf.caption("A flow run: tasks on a timeline, with their dependencies. From the Prefect docs.")],
-                gap=0.4,
+                [
+                    nf.eyebrow("PyPI downloads per month (September)"),
+                    bar_chart(
+                        [("2023", 0.61), ("2024", 1.35), ("2025", 3.05), ("2026", 8.17)],
+                        fmt=lambda v: f"{v:.1f} M",
+                    ),
+                    nf.caption("x6 in two years. Source: ClickPy (PyPI data). Downloads include CI runs: read it as a trend, not as users. Screenshots from the Dagster docs."),
+                ],
+                gap=1.4,
             ),
-            nf.code(
-                '''
-                from prefect import flow, task
-
-                @task(retries=3, retry_delay_seconds=60)
-                def extract(source): ...
-
-                @task
-                def build_gold(readings, settlement, plants): ...
-
-                @flow(log_prints=True)
-                def solar_pipeline():
-                    raw = [extract(s) for s in SOURCES]
-                    refresh_dashboard(build_gold(*raw))
-
-                if __name__ == "__main__":
-                    solar_pipeline.serve(cron="0 6 * * *")
-                ''',
-                size=9,
-                fit=(nf.CONTENT_CQW - 2.5) / 2,
-            ),
-            ratio=(1, 1),
+            ratio=(1.3, 1),
             gap="2.5cqw",
         ),
         nf.bullets(
             [
-                "Just Python: decorate the functions you already have with @flow and @task",
-                "Dynamic: branch and loop with plain if and for - no graph to declare up front",
-                "Can be self-hosted or use set up on Prefect Cloud",
+                "Asset-based: declare the data you want, and the function that builds it",
+                "Parameters are dependencies: free lineage, rebuild only what is stale",
+                "Apache 2.0, self-hosted or Dagster+. Prefect is acquiring Dagster Labs (July 2026)",
             ],
             size=theme.SIZE["small"],
         ),
-        title="Prefect",
+        title="Dagster",
         kicker="Orchestration",
-        pad_top="4.5cqw",
+        pad_top="4cqw",
         gap="1.4cqw",
     )
     return
@@ -2793,10 +2773,10 @@ def slide_marimo_docker_image(mo, nf, theme):
             ),
             nf.bullets(
                 [
-                    "**Just the app folder:** app/ holds dashboard.py and anything it reads; the image adds Python and the libraries",
-                    "**What you tested is what runs:** the same image on a laptop, in CI and in production",
-                    "**Versions are tags:** a new release is a new image; rolling back is running the previous one",
-                    "**Layers are cached:** change only the app and the rebuild skips the pip install",
+                    "A docker image is built layer by layer, from operating system, to dependencies, to the code that runs your app",
+                    "Defining a container in such way makes it easily reproducible",
+                    "You run your container on your infrastructure or on any cloud provider",
+                    "Extra steps might be required to secure the app beyond a simple password",
                 ],
                 size=theme.SIZE["small"],
             ),
@@ -2817,7 +2797,7 @@ def slide_more_services(diagram, nf):
     # Kubernetes runs the same images across several. Two clicks.
     nf.slide(
         diagram("diagrams/services.svg"),
-        title="More services, same idea: more containers",
+        title="More services = more containers",
         kicker="Deploying the platform",
         pad_top="5cqw",
     )
@@ -2831,72 +2811,7 @@ def slide_kubernetes(diagram, nf):
     # steps, one per click.
     nf.slide(
         diagram("diagrams/kubernetes.svg", width="94%"),
-        title="Kubernetes: keeping it all running",
-        kicker="Deploying the platform",
-        pad_top="4.5cqw",
-    )
-    return
-
-
-@app.cell
-def slide_kubernetes_manifests(mo, nf, theme):
-    # Deployment, 3b: what you actually write for Kubernetes - a declaration
-    # for our own app, ready-made Helm charts for the big tools.
-    nf.slide(
-        nf.two_col(
-            nf.code(
-                '''
-                # "two copies of the dashboard, always"
-                apiVersion: apps/v1
-                kind: Deployment
-                metadata:
-                  name: my-dashboard
-                spec:
-                  replicas: 2
-                  selector:
-                    matchLabels: {app: my-dashboard}
-                  template:
-                    metadata:
-                      labels: {app: my-dashboard}
-                    spec:
-                      containers:
-                        - name: dashboard
-                          image: registry.example.com/my-dashboard:1.0
-                          ports: [{containerPort: 2718}]
-                ''',
-                language="yaml",
-                size=8,
-                fit=(nf.CONTENT_CQW - 3) / 2,
-            ),
-            mo.vstack(
-                [
-                    nf.code(
-                        '''
-                        # the big tools come as ready-made charts
-                        helm repo add apache-airflow https://airflow.apache.org
-                        helm install airflow apache-airflow/airflow
-
-                        helm repo add superset https://apache.github.io/superset
-                        helm install superset superset/superset
-                        ''',
-                        language="bash",
-                        size=8,
-                        fit=(nf.CONTENT_CQW - 3) / 2,
-                    ),
-                    nf.bullets(
-                        [
-                            "**Everywhere:** managed on every cloud (EKS, AKS, GKE), or on your own servers (k3s, OpenShift)",
-                            "**Declared, not scripted:** you say what should run; Kubernetes keeps it true",
-                            "**But** it is a skill of its own: a small team may be better off with docker compose on one VM",
-                        ],
-                        size=theme.SIZE["small"],
-                    ),
-                ],
-                gap=1.2,
-            ),
-            gap="3cqw",
-        ),
-        title="What you write for Kubernetes",
+        title="Scaling with Kubernetes",
         kicker="Deploying the platform",
         pad_top="4.5cqw",
     )
@@ -2933,6 +2848,31 @@ def slide_oss_vs_managed_intro(assets, mo, nf):
         title="Open source or a managed platform?",
         kicker="Open source or managed",
         pad_top="4.5cqw",
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def slide_oss_costs_sanges(assets, mo, nf):
+    # OSS vs managed, costs intro: Adriano Sanges' cost comparison from his
+    # PyCon Italia 2026 talk - the same workload on a Modern Data Stack and on a
+    # Python-native one, at three sizes.
+    nf.slide(
+        mo.vstack(
+            [
+                mo.Html(
+                    '<div style="width:64cqw; margin:0 auto;">'
+                    + assets.img("logos/sanges-presentation.png", alt="Adriano Sanges presenting a cost comparison: same workload, wildly different price tags").text
+                    + "</div>"
+                ),
+                nf.caption("From Adriano Sanges' presentation \u201cThe Modern Data Stack Is Overkill (Most of the Time)\u201d at PyCon Italia 2026"),
+            ],
+            gap=0.6,
+            align="center",
+        ),
+        title="A cost comparison",
+        kicker="Open source or managed",
+        pad_top="4cqw",
     )
     return
 
@@ -3004,6 +2944,11 @@ def slide_oss_flexibility(nf):
                 "If a feature is missing you can implement it yourself, instead of waiting for it to show up on a vendor's roadmap",
             ]
         ),
+        nf.quote(
+            "Avoiding vendor lock-in has emerged as one of the leading drivers of open source adoption, "
+            "cited by 55% of respondents",
+            author="2026 State of Open Source Report",
+        ),
         title="Flexibility",
         kicker="Open source or managed",
         pad_top="5cqw",
@@ -3011,20 +2956,49 @@ def slide_oss_flexibility(nf):
     return
 
 
+@app.cell(hide_code=True)
+def slide_oss_integration(nf):
+    # OSS vs managed, 4: integration - a managed platform is one product, an
+    # open-source one is pieces you connect; and the Microsoft ecosystem.
+    nf.slide(
+        nf.bullets(
+            [
+                "A managed data platform is a one-stop shop: storage, pipelines, catalog and BI already work together",
+                "It takes less time to go from the raw data to a shared dashboard",
+                "With open source you integrate the tools yourself: login, permissions and metadata across every tool",
+                "Many corporations already run on Microsoft 365: Fabric and Power BI plug into the company's accounts, "
+                "Teams, Excel and SharePoint, which is a big plus",
+            ]
+        ),
+        title="Integration",
+        kicker="Open source or managed",
+        pad_top="5cqw",
+    )
+    return
+
+
 @app.cell
-def slide_oss_compliance(nf):
-    # OSS vs managed, 4: compliance - what managed platforms give you out of
-    # the box, and what it takes to do the same with open source.
+def slide_oss_governance_compliance(nf):
+    # OSS vs managed, 5: governance and compliance - what managed platforms
+    # give you out of the box, what it takes with open source, and the risks
+    # that come with each.
     nf.slide(
         nf.bullets(
             [
                 "Managed data platforms have built-in tools for security, encryption, data masking and authentication",
-                "They also come with certifications like ISO 27001 and SOC 2, which helps with audits",
-                "With open source you can get the same things, e.g. Keycloak for authentication, but you have to set them up "
-                "and maintain them yourself",
-            ]
+                #"They also come with certifications like ISO 27001 and SOC 2, which helps with audits",
+                "Data governance tools like catalogs and lineage are built in too (Unity Catalog, Purview). "
+                "Open-source alternatives exist, e.g. OpenMetadata or DataHub",
+                #"With open source you can get the same things, e.g. Keycloak for authentication, but you have to set them up "
+                #"and maintain them yourself",
+                "Managed platforms come with support and SLAs. With open source your team handles upgrades, security patches "
+                "and incidents",
+                "Open source has its own risks: projects can change licence (e.g. Elasticsearch, Redis, Terraform) or lose "
+                "their maintainers",
+                "Some governments are pushing for the adoption of open source tools to increase control over their digital infrastructure"
+            ],
         ),
-        title="Compliance",
+        title="Governance and compliance",
         kicker="Open source or managed",
         pad_top="5cqw",
     )
@@ -3039,10 +3013,10 @@ def slide_who_goes_open_source(icon_cards, nf, theme):
             [
                 ("server", "Organisations with their own infrastructure",
                  "Data centres or a private cloud, run by their own ops team - and often data that may not leave it (sovereignty, regulation).",
-                 "e.g. public sector, healthcare, banks, manufacturing", theme.MINT),
+                 "e.g. public sector, healthcare, banks", theme.MINT),
                 ("growth", "Data as a core competence",
-                 "Strong engineering teams for whom data is the product, or the competitive edge: they want control and build on it.",
-                 "e.g. Airbnb gave us Airflow and Superset, Netflix Iceberg, Facebook Presto - now Trino", theme.BLUE),
+                 "Strong engineering teams for whom skills in data and infrastructure management provide a competitive advantage",
+                 "e.g. consulting businesses, open-source companies, large companies that want to drive adoption of their libraries", theme.BLUE),
                 ("cap", "Academia and research",
                  "Open code and open formats make results easy to share and reproduce; budgets are tight; many run their own clusters.",
                  "e.g. Postgres and Spark came out of UC Berkeley, DuckDB out of CWI Amsterdam", theme.PURPLE),
@@ -3053,6 +3027,54 @@ def slide_who_goes_open_source(icon_cards, nf, theme):
         title="Who usually goes for open source",
         kicker="Open source or managed",
         pad_top="4.5cqw",
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def slide_repo_and_feedback(assets, mo, nf, theme):
+    # Closing: QR codes for the talk's repo and for feedback, side by side.
+    _MONO = "var(--marimo-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace)"
+    _repo = "github.com/DarioRubenScanferlato/OpenSourceDataToolsPresentation"
+
+
+    def _qr(_eyebrow, _img, _alt, _caption, _pad):
+        return mo.vstack(
+            [
+                nf.eyebrow(_eyebrow),
+                mo.Html(
+                    f'<div style="background:#ffffff; border-radius:{theme.SPACE["radius"]}; padding:{_pad}; width:24cqw;">'
+                    + assets.img(_img, alt=_alt, rounded=False).text
+                    + "</div>"
+                ),
+                _caption,
+            ],
+            gap=1.2,
+            align="center",
+        )
+
+
+    nf.slide(
+        mo.hstack(
+            [
+                _qr(
+                    "Presentation", "images/repo-qr.svg", "GitHub repo QR code",
+                    mo.Html(
+                        f'<a href="https://{_repo}" target="_blank" style="font-family:{_MONO}; font-size:{theme.SIZE["caption"]}; '
+                        f'color:{theme.MINT}; text-decoration:none; text-align:center; display:block;">'
+                        f'{_repo.rsplit("/", 1)[0]}/<br>{_repo.rsplit("/", 1)[1]}</a>'
+                    ),
+                    "2.6cqw",
+                ),
+                _qr("Feedback", "images/feedback-qr.png", "Feedback form QR code", nf.caption("Tell me what you think"), "0.6cqw"),
+            ],
+            justify="center",
+            gap=8,
+            align="start",
+        ),
+        title="Thank you!",
+        kicker="Code and feedback",
+        pad_top="5cqw",
     )
     return
 
@@ -3092,7 +3114,6 @@ def slide_resources(mo, nf, theme):
                         [
                             "marimo - docs.marimo.io",
                             "Delta Lake protocol - github.com/delta-io/delta, PROTOCOL.md",
-                            "Apache Iceberg spec - iceberg.apache.org/spec",
                         ],
                     ),
                 ]

@@ -50,6 +50,29 @@ body:has(.mo-slide) {
   background: #FFFFFF;
 }
 
+/* marimo's "Scroll for more" hint misfires on a slide with a not-yet-revealed
+   fragment: it measures how far down the hidden fragment starts with
+   getBoundingClientRect(), which includes reveal's scale transform, and
+   compares that against the unscaled clientHeight. Full screen scales the
+   deck up (>1x), so a slide that fits exactly gets the hint anyway - here,
+   "Ingesting the raw data" with the data-model overlay pending. Hide the hint
+   only while a fragment is pending; real overflow elsewhere still shows it. */
+.reveal section:has(.fragment:not(.visible)) [data-testid="slide-scroll-hint"] {
+  display: none;
+}
+
+/* The platform tabs on the "Data Platforms" slide (Fabric / Databricks /
+   Snowflake): marimo's tab strip is `overflow-x: auto`, which shows a
+   scrollbar under the buttons. The strip fits, so hide the bar. marimo copies
+   this stylesheet into the tabs' shadow root, so the rule reaches it there;
+   the marker span comes from the slide's tab labels. */
+[role="tablist"]:has([data-nf-platform-tab]) {
+  scrollbar-width: none;
+}
+[role="tablist"]:has([data-nf-platform-tab])::-webkit-scrollbar {
+  display: none;
+}
+
 /* Let a slide own the whole 960x540 frame: no cell chrome, no gutters. */
 .reveal .slides > section:has([data-nf-slide]) .marimo-cell,
 .reveal .slides > section:has([data-nf-slide]) .Cell,

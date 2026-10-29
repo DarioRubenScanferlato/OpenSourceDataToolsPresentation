@@ -1,0 +1,27 @@
+<!--
+  Injected into the page <head> by marimo (App(html_head_file=...)); marimo
+  only does this in `marimo run`, not in `marimo edit`.
+
+  Keep Vega tooltips visible when the deck is full screen. vega-tooltip draws
+  every chart's tooltip in one shared <div id="vg-tooltip-element">, created on
+  the first hover and appended to the full-screen element if there is one, or
+  to <body> otherwise - and then reused forever. Full screen only paints the
+  full-screen element's subtree, so a tooltip div created before going full
+  screen (any hover in the windowed deck) stays in <body> and is never seen.
+  Move it into whatever is full screen now, and back to <body> on exit.
+-->
+<script>
+  (() => {
+    const ID = "vg-tooltip-element";
+    const place = () => {
+      const el = document.getElementById(ID);
+      if (!el) return;
+      const host = document.fullscreenElement || document.webkitFullscreenElement || document.body;
+      if (host && el.parentElement !== host) host.appendChild(el);
+    };
+    document.addEventListener("fullscreenchange", place);
+    document.addEventListener("webkitfullscreenchange", place);
+    // the div only exists after the first hover; catch it whenever it appears
+    new MutationObserver(place).observe(document.documentElement, { childList: true, subtree: true });
+  })();
+</script>

@@ -58,6 +58,7 @@ __all__ = [
     "two_col",
     "tool",
     "stack",
+    "fragment",
     "code",
     "dataframe",
     "image",
@@ -117,6 +118,7 @@ def slide(
     gap: str = _S["gap"],
     mark: bool = True,
     pad_top: str | None = None,
+    pad_x: str | None = None,
 ) -> mo.Html:
     """The general-purpose content slide.
 
@@ -132,6 +134,9 @@ def slide(
         pad_top: override the template's 17.4% top margin. Dense slides - a
             grid, a wide table - need to start higher, and a slide that
             overflows scrolls rather than shrinks, so buy the room here.
+        pad_x: override the template's 9% side margins, for a slide that
+            needs the width (side-by-side code and chart, say). The content
+            column is then ``100 - 2 * pad_x`` cqw wide, not ``CONTENT_CQW``.
     """
     tn = t.tone(tone)
     blocks: list[str] = []
@@ -155,7 +160,7 @@ def slide(
             box_sizing="border-box",
             position="relative",
             min_height=t.SLIDE_MIN_HEIGHT,
-            padding=f"{pad_top or _S['margin_top']} {_S['margin_x']} {_S['margin_bottom']}",
+            padding=f"{pad_top or _S['margin_top']} {pad_x or _S['margin_x']} {_S['margin_bottom']}",
             display="flex",
             flex_direction="column",
             justify_content="center" if align == "center" else "flex-start",
@@ -855,6 +860,7 @@ def code(
     tone: str = t.DEFAULT_TONE,
     size: float | None = None,
     fit: float | None = None,
+    highlight: Iterable[int] = (),
 ) -> mo.Html:
     """A syntax-highlighted, monospace code block sized for the deck.
 
@@ -876,12 +882,17 @@ def code(
     about 40). The font then shrinks - never grows - until the longest line
     fits, so a snippet never needs a horizontal scrollbar.
 
+    ``highlight`` takes 1-based line numbers (of the dedented, stripped
+    source) to mark as new: a mint tint across the full width of the block
+    and a mint bar at its left edge - for a build-up where each slide adds
+    to the code of the one before.
+
     This is for code you want to *show*. To show the code of the cell you are
     on, use marimo's own toggle (``C`` in slides mode) instead.
     """
     import textwrap
 
-    from pygments import highlight
+    from pygments import highlight as pygments_highlight
     from pygments.formatters import HtmlFormatter
     from pygments.lexers import get_lexer_by_name
 
@@ -892,7 +903,9 @@ def code(
         # 2 x SPACE["gap"] (2.5cqw each)
         _longest = max((len(line) for line in _source.splitlines()), default=1)
         _font = f"min({_font}, {(fit - 5.2) / (_longest * 0.61):.3f}cqw)"
+    _hl = sorted(set(highlight))
     _formatter = HtmlFormatter(
+        hl_lines=_hl,
         style="dracula",
         noclasses=True,
         cssstyles=f"border-radius:{_S['radius']};",
@@ -907,7 +920,26 @@ def code(
             font_size=_font,
         ),
     )
-    _highlighted = highlight(_source, get_lexer_by_name(language), _formatter)
+    _highlighted = pygments_highlight(_source, get_lexer_by_name(language), _formatter)
+    if _hl:
+        # With noclasses, Pygments marks a highlighted line as an inline
+        # <span> with the style's highlight colour - a box around the text
+        # only. Make it a block that bleeds into the <pre>'s side padding,
+        # so the tint spans the whole line, with an accent bar on the left.
+        _hll = f'<span style="background-color: {_formatter.style.highlight_color}">'
+        assert _hll in _highlighted, "Pygments changed its highlighted-line markup"
+        _highlighted = _highlighted.replace(
+            _hll,
+            "<span style=\""
+            + _style(
+                display="block",
+                margin=f"0 -{_S['gap']}",
+                padding=f"0 {_S['gap']}",
+                background=f"color-mix(in srgb, {t.MINT} 16%, transparent)",
+                box_shadow=f"inset 0.4cqw 0 0 {t.MINT}",
+            )
+            + '\">',
+        )
     return mo.Html(_highlighted)
 
 
@@ -962,6 +994,15 @@ def dataframe(
             ),
         )
     )
+
+
+def fragment(content: Any, index: int | None = None) -> mo.Html:
+    """Reveal ``content`` on the presenter's next click, like a marimo
+    ``fragment`` cell but for one block *inside* a slide. ``index`` sets the
+    click it appears on (reveal's ``data-fragment-index``) - e.g. after an
+    animated diagram's own fragments 1-3, pass ``index=4``."""
+    _idx = f' data-fragment-index="{index}"' if index is not None else ""
+    return mo.Html(f'<div class="fragment"{_idx}>{_render(content)}</div>')
 
 
 def image(src: str, alt: str = "", rounded: bool = True, width: str = "100%") -> mo.Html:
