@@ -136,39 +136,26 @@ def slide_big_question(nf):
 
 
 @app.cell(hide_code=True)
-def data_gate(mo):
+def data_gate():
     # The raw data isn't committed (data/ is git-ignored): it is generated
     # by the synthetic-data simulator in solar_data_gen/, deterministically
-    # (same seed, same files). On a fresh checkout, offer to do that first.
+    # (same seed, same files).
     from solar_data_gen import bronze
 
-    generate_button = mo.ui.run_button(label="Generate the data")
-    return bronze, generate_button
+    return (bronze,)
 
 
 @app.cell(hide_code=True)
-def ensure_data(bronze, generate_button, mo):
+def ensure_data(bronze, mo):
+    # On a fresh checkout, simulate the data before anything reads it: 8
+    # plants over two years, hourly, about 20 seconds, nothing downloaded. No
+    # button to click: this cell is hidden in the slides, so the presenter
+    # would never see one. The embedded dashboard waits on `data_ready`.
     if not bronze.is_ready():
-        mo.stop(
-            not generate_button.value,
-            mo.callout(
-                mo.vstack(
-                    [
-                        mo.md(
-                            "**The solar data isn't generated yet.** It is simulated from "
-                            "scratch - 8 plants over two years, hourly - and takes about "
-                            "20 seconds. Nothing is downloaded."
-                        ),
-                        generate_button,
-                    ]
-                ),
-                kind="warn",
-            ),
-        )
-        with mo.status.spinner(title="Generating the solar data..."):
+        with mo.status.spinner(title="Generating the solar data (about 20 seconds)..."):
             bronze.generate()
     data_ready = True
-    return
+    return (data_ready,)
 
 
 @app.cell(hide_code=True)
@@ -179,13 +166,16 @@ def import_dashboard_app():
 
 
 @app.cell(hide_code=True)
-async def embed_dashboard(solar_app):
+async def embed_dashboard(data_ready, solar_app):
     # `embed()` can't be called in the cell that imports the app - marimo
     # runs the embedded notebook in its own nested kernel, so every `mo.ui`
     # element (the filters, the click cross-filter) stays fully interactive
     # here, not just a static screenshot. `dashboard.defs` exposes every
     # top-level name the notebook defines (dataframes, charts, UI elements),
     # which the next few slides reuse directly instead of recomputing.
+    # only once the data exists: on a fresh checkout the dashboard's own
+    # cells would stop, and `defs` would have no data in it
+    assert data_ready
     dashboard = await solar_app.embed()
     return (dashboard,)
 

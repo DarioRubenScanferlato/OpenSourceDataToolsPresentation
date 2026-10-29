@@ -1,7 +1,7 @@
 [project]
 name = "os-data-platform"
 version = "0.1.0"
-description = "Add your description here"
+description = "Slides and live demos for the talk \"From raw data to dashboard with open source software\""
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
